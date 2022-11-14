@@ -1,0 +1,10 @@
+[package]
+name = "casperfpga"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tapcp = {version = "0.1", git = "https://github.com/kiranshila/tapcp_rs.git"}
+thiserror = "1"
+anyhow = "1"
+paste = "1"
