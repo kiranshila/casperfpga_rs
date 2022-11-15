@@ -5,13 +5,15 @@ use crate::core::{Device, DeviceMap};
 use anyhow::{anyhow, bail};
 use std::collections::HashMap;
 
-struct Mock {
+/// A platform that mocks reads and writes, useful for testing
+pub struct Mock {
     memory: HashMap<usize, u8>,
     devices: DeviceMap,
 }
 
 impl Mock {
-    fn new(devices: DeviceMap) -> Self {
+    /// Construct a new mock platform by providing a device map `devices`
+    pub fn new(devices: DeviceMap) -> Self {
         // We'll represent each address lazily instead of havig a dense array
         // but it really shouldn't matter
         let mut memory: HashMap<usize, u8> = Default::default();
@@ -26,38 +28,34 @@ impl Mock {
 }
 
 impl Transport for Mock {
-    fn connect(&mut self) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn disconnect(&mut self) -> anyhow::Result<()> {
-        Ok(())
-    }
-
     fn is_running(&mut self) -> anyhow::Result<bool> {
         Ok(true)
     }
 
-    fn read_vec(&mut self, device: &str, n: usize, offset: usize) -> anyhow::Result<Vec<u8>> {
+    fn read_bytes<const N: usize>(
+        &mut self,
+        device: &str,
+        offset: usize,
+    ) -> anyhow::Result<[u8; N]> {
         // Get the address in memory
         let dev = self
             .devices
             .get(device)
             .ok_or(anyhow!("Device not found"))?;
-        // Construct the vector
-        let mut bytes = vec![];
-        for i in offset..(offset + n) {
+        // Construct the array
+        let mut bytes = [0u8; N];
+        for i in offset..(offset + N) {
             // Pull bytes from memory into bytes vector
             let byte = self
                 .memory
                 .get(&(dev.addr + i))
                 .ok_or(anyhow!("Out of bounds indexing"))?;
-            bytes.push(*byte);
+            bytes[i - offset] = *byte;
         }
         Ok(bytes)
     }
 
-    fn write(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()> {
+    fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()> {
         // Get the address in memory
         let dev = self
             .devices
@@ -99,9 +97,10 @@ mod tests {
                         "sys_scratchpad".to_owned(),
                         Device { addr: 0, length: core::mem::size_of::<$num>() },
                     )]));
-                    transport.[<write_$num>]("sys_scratchpad",0,$v).unwrap();
-                    let read_num = transport.[<read_$num>]("sys_scratchpad", 0).unwrap();
-                    assert_eq!(read_num, $v);
+                    let num: $num = $v;
+                    transport.write("sys_scratchpad", 0, &num).unwrap();
+                    let read_num: $num = transport.read("sys_scratchpad", 0).unwrap();
+                    assert_eq!(read_num, num);
                 }
             }
         };
@@ -113,8 +112,8 @@ mod tests {
             "sys_scratchpad".to_owned(),
             Device { addr: 0, length: 4 },
         )]));
-        let bytes = transport.read_vec("sys_scratchpad", 4, 0).unwrap();
-        assert_eq!(bytes, vec![0, 0, 0, 0]);
+        let bytes = transport.read_bytes("sys_scratchpad", 0).unwrap();
+        assert_eq!(bytes, [0, 0, 0, 0]);
     }
 
     #[test]
@@ -123,8 +122,8 @@ mod tests {
             "sys_scratchpad".to_owned(),
             Device { addr: 0, length: 4 },
         )]));
-        let bytes = transport.read_vec("sys_scratchpad", 2, 2).unwrap();
-        assert_eq!(bytes, vec![0, 0]);
+        let bytes = transport.read_bytes("sys_scratchpad", 2).unwrap();
+        assert_eq!(bytes, [0, 0]);
     }
 
     #[test]
@@ -134,8 +133,10 @@ mod tests {
             Device { addr: 0, length: 4 },
         )]));
         let write_bytes = [1, 2, 3, 4];
-        transport.write("sys_scratchpad", 0, &write_bytes).unwrap();
-        let read_bytes = transport.read_vec("sys_scratchpad", 4, 0).unwrap();
+        transport
+            .write_bytes("sys_scratchpad", 0, &write_bytes)
+            .unwrap();
+        let read_bytes = transport.read_bytes("sys_scratchpad", 0).unwrap();
         assert_eq!(read_bytes, write_bytes);
     }
 
@@ -146,11 +147,13 @@ mod tests {
             Device { addr: 0, length: 4 },
         )]));
         let write_bytes = [7, 8];
-        transport.write("sys_scratchpad", 2, &write_bytes).unwrap();
-        let read_bytes = transport.read_vec("sys_scratchpad", 4, 0).unwrap();
-        assert_eq!(read_bytes, vec![0, 0, 7, 8]);
-        let read_bytes = transport.read_vec("sys_scratchpad", 2, 2).unwrap();
-        assert_eq!(read_bytes, vec![7, 8]);
+        transport
+            .write_bytes("sys_scratchpad", 2, &write_bytes)
+            .unwrap();
+        let read_bytes = transport.read_bytes("sys_scratchpad", 0).unwrap();
+        assert_eq!(read_bytes, [0, 0, 7, 8]);
+        let read_bytes = transport.read_bytes("sys_scratchpad", 2).unwrap();
+        assert_eq!(read_bytes, [7, 8]);
     }
 
     #[test]
@@ -160,22 +163,23 @@ mod tests {
             Device { addr: 0, length: 4 },
         )]));
         let write_bytes = [1, 2, 3, 4];
-        transport.write("sys_scratchpad", 0, &write_bytes).unwrap();
-        let read_bytes = transport.read("sys_scratchpad", 0).unwrap();
+        transport
+            .write_bytes("sys_scratchpad", 0, &write_bytes)
+            .unwrap();
+        let read_bytes = transport.read_bytes("sys_scratchpad", 0).unwrap();
         assert_eq!(read_bytes, write_bytes);
     }
 
-    test_rw_num!(u8,42);
-    test_rw_num!(u16,0xDEAD);
-    test_rw_num!(u32,0xDEAD_BEEF);
-    test_rw_num!(u64,0xDEAD_BEEF_B0BA_CAFE);
-    test_rw_num!(u128,0xDEAD_BEEF_B0BA_CAFE_0000_0000_0000);
-    test_rw_num!(i8,-42);
-    test_rw_num!(i16,-0xDEA);
-    test_rw_num!(i32,-0xDEAD_BEE);
-    test_rw_num!(i64,-0xDEAD_BEEF_B0BA_CAF);
-    test_rw_num!(i128,-0xDEAD_BEEF_B0BA_CAFE_0000_0000_0000);
-    test_rw_num!(f32,3.1415926);
-    test_rw_num!(f64,6.022e23);
-
+    test_rw_num!(u8, 42);
+    test_rw_num!(u16, 0xDEAD);
+    test_rw_num!(u32, 0xDEAD_BEEF);
+    test_rw_num!(u64, 0xDEAD_BEEF_B0BA_CAFE);
+    test_rw_num!(u128, 0xDEAD_BEEF_B0BA_CAFE_0000_0000_0000);
+    test_rw_num!(i8, -42);
+    test_rw_num!(i16, -0xDEA);
+    test_rw_num!(i32, -0xDEAD_BEE);
+    test_rw_num!(i64, -0xDEAD_BEEF_B0BA_CAF);
+    test_rw_num!(i128, -0xDEAD_BEEF_B0BA_CAFE_0000_0000_0000);
+    test_rw_num!(f32, 3.1415926);
+    test_rw_num!(f64, -6.022e23);
 }

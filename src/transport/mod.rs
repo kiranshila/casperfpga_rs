@@ -1,98 +1,129 @@
 //! Defines all the transport mechanisms for which all casperfpga transports must implement
 
-use crate::core::DeviceMap;
-use anyhow::bail;
-use paste::paste;
-use std::path::Path;
-
-mod mock;
+pub mod mock;
 pub mod tapcp;
 
-macro_rules! read_num {
+use crate::core::DeviceMap;
+use std::path::Path;
+
+/// Types that implement this trait can be serialized such that they can be written to FPGA software registers
+pub trait Serialize {
+    type Chunk;
+    fn serialize(&self) -> Self::Chunk;
+}
+
+/// Types that implement this trait can be deserialized such that they can be read from FPGA software registers
+pub trait Deserialize {
+    type Chunk;
+    fn deserialize(chunk: Self::Chunk) -> Self;
+}
+
+macro_rules! ser_num {
     ($num:ty) => {
-        paste! {
-            #[doc = "Read a `" $num "` from `device` from byte offset `offset`"]
-            fn [<read_$num>](&mut self, device: &str, offset: usize) -> anyhow::Result<$num> {
-                Ok($num::from_be_bytes(self.read(device, offset)?))
+        impl Serialize for $num {
+            type Chunk = [u8; core::mem::size_of::<$num>()];
+            fn serialize(&self) -> Self::Chunk {
+                self.to_be_bytes()
             }
         }
     };
 }
 
-macro_rules! write_num {
+macro_rules! deser_num {
     ($num:ty) => {
-        paste! {
-            #[doc = "Read a `" $num "` from `device` from byte offset `offset`"]
-            fn [<write_$num>](&mut self, device: &str, offset: usize, num: $num) -> anyhow::Result<()> {
-                self.write(device,offset,&num.to_be_bytes())?;
-                Ok(())
+        impl Deserialize for $num {
+            type Chunk = [u8; core::mem::size_of::<$num>()];
+            fn deserialize(chunk: Self::Chunk) -> Self {
+                <$num>::from_be_bytes(chunk)
             }
         }
     };
 }
 
+// Implement serdes for all builtin numeric types
+ser_num!(u8);
+ser_num!(u16);
+ser_num!(u32);
+ser_num!(u64);
+ser_num!(u128);
+ser_num!(i8);
+ser_num!(i16);
+ser_num!(i32);
+ser_num!(i64);
+ser_num!(i128);
+ser_num!(f32);
+ser_num!(f64);
+
+deser_num!(u8);
+deser_num!(u16);
+deser_num!(u32);
+deser_num!(u64);
+deser_num!(u128);
+deser_num!(i8);
+deser_num!(i16);
+deser_num!(i32);
+deser_num!(i64);
+deser_num!(i128);
+deser_num!(f32);
+deser_num!(f64);
+
+/// The trait that is implemented for CASPER FPGA transport mechanisms.
+/// The methods of this trait *assume* that the device is already connected.
 pub trait Transport {
-    /// Connect to a device running a supported transport mechanism
-    fn connect(&mut self) -> anyhow::Result<()>;
-
-    /// Disconnect from the device
-    fn disconnect(&mut self) -> anyhow::Result<()>;
-
     /// Tests to see if the connected FPGA is programmed and running
     fn is_running(&mut self) -> anyhow::Result<bool>;
 
-    /// Tests to see if the transport layer is connected to the platform
-    /// By default, this will call is_running
-    fn is_connected(&mut self) -> anyhow::Result<bool> {
-        self.is_running()
-    }
-
-    /// Read `n` bytes from `device` from byte offset `offset` into a vector
-    fn read_vec(&mut self, device: &str, n: usize, offset: usize) -> anyhow::Result<Vec<u8>>;
-
     /// Read `n` bytes from `device` from byte offset `offset` into a const-sized array
-    /// This is useful for deserializing into statically-sized containers such as numbers and packed structs
-    fn read<const N: usize>(&mut self, device: &str, offset: usize) -> anyhow::Result<[u8; N]> {
-        let bytes = self.read_vec(device, N, offset)?;
-        // Ensure size
-        let slice = bytes.as_slice();
-        let array = match slice.try_into() {
-            Ok(a) => a,
-            Err(_) => bail!("We asked for {} bytes but received {}", N, bytes.len()),
-        };
-        Ok(array)
-    }
+    fn read_bytes<const N: usize>(
+        &mut self,
+        device: &str,
+        offset: usize,
+    ) -> anyhow::Result<[u8; N]>;
 
-    // Generate the reads for the numbers
-    read_num!(u8);
-    read_num!(u16);
-    read_num!(u32);
-    read_num!(u64);
-    read_num!(u128);
-    read_num!(i8);
-    read_num!(i16);
-    read_num!(i32);
-    read_num!(i64);
-    read_num!(i128);
-    read_num!(f32);
-    read_num!(f64);
+    /// Generically read a `Deserializable` type `T` from the connected platform at `device` and offset `offset`.
+    /// # Example
+    /// ```
+    /// # use casperfpga::core::Device;
+    /// # use std::collections::HashMap;
+    /// # use casperfpga::transport::mock::Mock;
+    /// # let mut transport = Mock::new(HashMap::from([("sys_scratchpad".to_owned(),Device { addr: 0, length: 4 },)]));
+    /// # use crate::casperfpga::transport::Transport;
+    /// let my_num: u32 = transport.read("sys_scratchpad",0).unwrap();
+    /// ```
+    fn read<T, const N: usize>(&mut self, device: &str, offset: usize) -> anyhow::Result<T>
+    where
+        T: Deserialize<Chunk = [u8; N]>,
+    {
+        let bytes: [u8; N] = self.read_bytes(device, offset)?;
+        Ok(T::deserialize(bytes))
+    }
 
     /// Write `data` to `device` from byte offset `offset`
-    fn write(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()>;
+    fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()>;
 
-    // Generate the writes for the numbers
-    write_num!(u8);
-    write_num!(u16);
-    write_num!(u32);
-    write_num!(u64);
-    write_num!(u128);
-    write_num!(i8);
-    write_num!(i16);
-    write_num!(i32);
-    write_num!(i64);
-    write_num!(i128);
-    write_num!(f32);
-    write_num!(f64);
+    /// Generically write a `Serializable` type `T` to the connected platform at `device` and offset `offset`.
+    /// # Example
+    /// ```
+    /// # use casperfpga::core::Device;
+    /// # use std::collections::HashMap;
+    /// # use casperfpga::transport::mock::Mock;
+    /// # let mut transport = Mock::new(HashMap::from([("sys_scratchpad".to_owned(),Device { addr: 0, length: 4 },)]));
+    /// # use crate::casperfpga::transport::Transport;
+    /// let my_num = 3.14f32;
+    /// transport.write("sys_scratchpad",0, &my_num).unwrap();
+    /// ```
+    fn write<T, const N: usize>(
+        &mut self,
+        device: &str,
+        offset: usize,
+        data: &T,
+    ) -> anyhow::Result<()>
+    where
+        T: Serialize<Chunk = [u8; N]>,
+    {
+        // Create bytes from the data and write with `write_bytes`
+        self.write_bytes(device, offset, &data.serialize())
+    }
 
     /// Retrieve a list of available devices on the (potentially programmed) connected platform
     fn listdev(&mut self) -> anyhow::Result<DeviceMap>;
@@ -102,4 +133,10 @@ pub trait Transport {
 
     /// Deprograms the connected platform
     fn deprogram(&mut self) -> anyhow::Result<()>;
+
+    /// Gets the temperature of the device in celcius
+    /// By default, this is unimplemented and therefore optional
+    fn temperature(&mut self) -> anyhow::Result<f32> {
+        unimplemented!()
+    }
 }
