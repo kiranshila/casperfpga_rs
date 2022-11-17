@@ -1,5 +1,9 @@
 //! Routines for interacting with the CASPER 10GbE Core
-use crate::{register_address, yellow_blocks::RegisterAddress, transport::{Serialize, Deserialize}};
+use crate::{
+    register_address,
+    transport::{Deserialize, Serialize},
+    yellow_blocks::RegisterAddress, serde_packed,
+};
 use packed_struct::{prelude::*, PackedStruct, PackingResult};
 use std::net::Ipv4Addr;
 // The details of the memory map here are magical and come from Jack H
@@ -51,6 +55,7 @@ pub enum EthernetType {
     HundredGbE = 5,
 }
 
+// Address impls
 register_address! {CoreAddress,CoreType}
 register_address! {CoreAddress,BufferSizes}
 register_address! {CoreAddress,WordLengths}
@@ -64,6 +69,21 @@ register_address! {CoreAddress,BytesAvailable}
 register_address! {CoreAddress,PromiscRstEn}
 register_address! {CoreAddress,Port}
 register_address! {CoreAddress,Status}
+
+// Serde impls
+serde_packed!(CoreType);
+serde_packed!(BufferSizes);
+serde_packed!(WordLengths);
+serde_packed!(MacAddress);
+serde_packed!(IpAddress);
+serde_packed!(GatewayAddress);
+serde_packed!(Netmask);
+serde_packed!(MulticastIp);
+serde_packed!(MulticastMask);
+serde_packed!(BytesAvailable);
+serde_packed!(PromiscRstEn);
+serde_packed!(Port);
+serde_packed!(Status);
 
 #[derive(PackedStruct, Debug)]
 #[packed_struct(bit_numbering = "lsb0", size_bytes = "4")]
@@ -157,24 +177,4 @@ pub struct Status {
     // There's other (undocumented) stuff in here
     #[packed_field(bits = "0")]
     pub link_up: bool,
-}
-
-// Then implement the tarnsport serde using the packed struct stuff
-// These are effectivley aliases of the packed struct methods
-
-impl Serialize for Port {
-    type Chunk = [u8;std::mem::size_of::<Self>()];
-
-    fn serialize(&self) -> Self::Chunk {
-        self.pack().expect("Packing failed, this shouldn't happen")
-    }
-}
-
-impl Deserialize for Port {
-    type Chunk = [u8;std::mem::size_of::<Self>()];
-
-    fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self> {
-            Ok(Self::unpack(&chunk)?)
-    }
-
 }

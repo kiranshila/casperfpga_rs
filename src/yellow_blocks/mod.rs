@@ -18,3 +18,25 @@ macro_rules! register_address {
         }
     };
 }
+
+// Auto implement our transport serde for packed_struct things
+#[macro_export]
+macro_rules! serde_packed {
+    ($type:ty) => {
+        impl Serialize for $type {
+            type Chunk = [u8; std::mem::size_of::<Self>()];
+
+            fn serialize(&self) -> Self::Chunk {
+                self.pack().expect("Packing failed, this shouldn't happen")
+            }
+        }
+
+        impl Deserialize for $type {
+            type Chunk = [u8; std::mem::size_of::<Self>()];
+
+            fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self> {
+                Ok(Self::unpack(&chunk)?)
+            }
+        }
+    };
+}
