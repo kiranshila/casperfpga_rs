@@ -13,9 +13,9 @@ pub trait Serialize {
 }
 
 /// Types that implement this trait can be deserialized such that they can be read from FPGA software registers
-pub trait Deserialize {
+pub trait Deserialize: Sized {
     type Chunk;
-    fn deserialize(chunk: Self::Chunk) -> Self;
+    fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self>;
 }
 
 macro_rules! ser_num {
@@ -33,8 +33,8 @@ macro_rules! deser_num {
     ($num:ty) => {
         impl Deserialize for $num {
             type Chunk = [u8; core::mem::size_of::<$num>()];
-            fn deserialize(chunk: Self::Chunk) -> Self {
-                <$num>::from_be_bytes(chunk)
+            fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self> {
+                Ok(<$num>::from_be_bytes(chunk))
             }
         }
     };
@@ -95,7 +95,7 @@ pub trait Transport {
         T: Deserialize<Chunk = [u8; N]>,
     {
         let bytes: [u8; N] = self.read_bytes(device, offset)?;
-        Ok(T::deserialize(bytes))
+        Ok(T::deserialize(bytes)?)
     }
 
     /// Write `data` to `device` from byte offset `offset`
