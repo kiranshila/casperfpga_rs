@@ -1,9 +1,6 @@
 //! Routines for interacting with the CASPER 10GbE Core
-use crate::{
-    register_address,
-    transport::{Deserialize, Serialize},
-    yellow_blocks::RegisterAddress, serde_packed,
-};
+use crate::transport::{Deserialize, Serialize};
+use casperfpga_derive::{address, CasperSerde};
 use packed_struct::{prelude::*, PackedStruct, PackingResult};
 use std::net::Ipv4Addr;
 // The details of the memory map here are magical and come from Jack H
@@ -12,39 +9,6 @@ use std::net::Ipv4Addr;
 // So, we need to read/write to the register of that name (the name of the block from Simulink)
 // at an offset of the address of the thing we care about. We will always read 4 bytes and then
 // pass to the packed_struct methods to serde from the rust types
-
-#[derive(Debug, Copy, Clone)]
-#[repr(u8)]
-enum CoreAddress {
-    CoreType = 0x0,
-    BufferSizes = 0x4,
-    WordLengths = 0x8,
-    MacAddress = 0xC,
-    IpAddress = 0x14,
-    GatewayAddress = 0x18,
-    Netmask = 0x1C,
-    MulticastIp = 0x20,
-    MulticastMask = 0x24,
-    BytesAvailable = 0x28,
-    PromiscRstEn = 0x2C,
-    Port = 0x30,
-    Status = 0x34,
-    // Control = 0x3C,
-    // ARPSize = 0x44,
-    // TXPacketRate = 0x48,
-    // TXPacketCounter = 0x4C,
-    // TXValidRate = 0x50,
-    // TXValidCounter = 0x54,
-    // TXOverflowCounter = 0x58,
-    // TXAlmostFullCounter = 0x5C,
-    // RXPacketRate = 0x60,
-    // RXPacketCounter = 0x64,
-    // RXValidRate = 0x68,
-    // RXValidCounter = 0x6C,
-    // RXOverflowCounter = 0x70,
-    // RXBadCounter = 0x74,
-    //  CounterReset = 0x78,
-}
 
 #[derive(PrimitiveEnum_u8, Debug, Copy, Clone)]
 pub enum EthernetType {
@@ -55,38 +19,9 @@ pub enum EthernetType {
     HundredGbE = 5,
 }
 
-// Address impls
-register_address! {CoreAddress,CoreType}
-register_address! {CoreAddress,BufferSizes}
-register_address! {CoreAddress,WordLengths}
-register_address! {CoreAddress,MacAddress}
-register_address! {CoreAddress,IpAddress}
-register_address! {CoreAddress,GatewayAddress}
-register_address! {CoreAddress,Netmask}
-register_address! {CoreAddress,MulticastIp}
-register_address! {CoreAddress,MulticastMask}
-register_address! {CoreAddress,BytesAvailable}
-register_address! {CoreAddress,PromiscRstEn}
-register_address! {CoreAddress,Port}
-register_address! {CoreAddress,Status}
-
-// Serde impls
-serde_packed!(CoreType);
-serde_packed!(BufferSizes);
-serde_packed!(WordLengths);
-serde_packed!(MacAddress);
-serde_packed!(IpAddress);
-serde_packed!(GatewayAddress);
-serde_packed!(Netmask);
-serde_packed!(MulticastIp);
-serde_packed!(MulticastMask);
-serde_packed!(BytesAvailable);
-serde_packed!(PromiscRstEn);
-serde_packed!(Port);
-serde_packed!(Status);
-
-#[derive(PackedStruct, Debug)]
+#[derive(PackedStruct, CasperSerde, Debug)]
 #[packed_struct(bit_numbering = "lsb0", size_bytes = "4")]
+#[address(0x0)]
 pub struct CoreType {
     #[packed_field(bits = "24")]
     pub cpu_tx_enable: bool,
@@ -98,7 +33,8 @@ pub struct CoreType {
     pub core_type: EthernetType,
 }
 
-#[derive(PackedStruct, Debug)]
+#[derive(PackedStruct, CasperSerde, Debug)]
+#[address(0x4)]
 pub struct BufferSizes {
     #[packed_field(endian = "msb")]
     pub tx_buf_max: u16,
@@ -106,7 +42,8 @@ pub struct BufferSizes {
     pub rx_buf_max: u16,
 }
 
-#[derive(PackedStruct, Debug)]
+#[derive(PackedStruct, CasperSerde, Debug)]
+#[address(0x8)]
 pub struct WordLengths {
     #[packed_field(endian = "msb")]
     pub tx_word_size: u16,
@@ -116,12 +53,26 @@ pub struct WordLengths {
 
 // Implement the packing traits for network objects
 
-#[derive(Debug)]
+#[derive(CasperSerde, Debug)]
+#[address(0xC)]
 pub struct MacAddress([u8; 6]);
 
+impl PackedStruct for MacAddress {
+    type ByteArray = [u8; 6];
+
+    fn pack(&self) -> PackingResult<Self::ByteArray> {
+        Ok(self.0)
+    }
+
+    fn unpack(src: &Self::ByteArray) -> packed_struct::PackingResult<Self> {
+        Ok(MacAddress(*src))
+    }
+}
+
 macro_rules! ip_register {
-    ($name:ident) => {
+    ($name:ident, $addr:literal) => {
         #[derive(Debug)]
+        #[address($addr)]
         pub struct $name(pub Ipv4Addr);
 
         impl PackedStruct for $name {
@@ -138,13 +89,14 @@ macro_rules! ip_register {
     };
 }
 
-ip_register!(IpAddress);
-ip_register!(GatewayAddress);
-ip_register!(Netmask);
-ip_register!(MulticastIp);
-ip_register!(MulticastMask);
+ip_register!(IpAddress, 0x14);
+ip_register!(GatewayAddress, 0x18);
+ip_register!(Netmask, 0x1C);
+ip_register!(MulticastIp, 0x20);
+ip_register!(MulticastMask, 0x24);
 
-#[derive(PackedStruct, Debug)]
+#[derive(PackedStruct, CasperSerde, Debug)]
+#[address(0x28)]
 pub struct BytesAvailable {
     #[packed_field(endian = "msb")]
     pub tx_size: u16,
@@ -152,8 +104,9 @@ pub struct BytesAvailable {
     pub rx_size: u16,
 }
 
-#[derive(PackedStruct, Debug)]
+#[derive(PackedStruct, CasperSerde, Debug)]
 #[packed_struct(bit_numbering = "lsb0", size_bytes = "4")]
+#[address(0x2C)]
 pub struct PromiscRstEn {
     #[packed_field(bits = "4")]
     pub soft_rst: bool,
@@ -163,7 +116,8 @@ pub struct PromiscRstEn {
     pub enable: bool,
 }
 
-#[derive(PackedStruct, Debug)]
+#[derive(PackedStruct, CasperSerde, Debug)]
+#[address(0x30)]
 pub struct Port {
     #[packed_field(endian = "msb")]
     pub port_mask: u16,
@@ -171,8 +125,9 @@ pub struct Port {
     pub port: u16,
 }
 
-#[derive(PackedStruct, Debug)]
+#[derive(PackedStruct, CasperSerde, Debug)]
 #[packed_struct(bit_numbering = "lsb0", size_bytes = "8")]
+#[address(0x34)]
 pub struct Status {
     // There's other (undocumented) stuff in here
     #[packed_field(bits = "0")]

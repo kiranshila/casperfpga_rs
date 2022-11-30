@@ -95,7 +95,7 @@ pub trait Transport {
         T: Deserialize<Chunk = [u8; N]>,
     {
         let bytes: [u8; N] = self.read_bytes(device, offset)?;
-        Ok(T::deserialize(bytes)?)
+        T::deserialize(bytes)
     }
 
     /// Write `data` to `device` from byte offset `offset`

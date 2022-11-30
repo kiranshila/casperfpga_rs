@@ -68,7 +68,7 @@ impl Transport for Tapcp {
         todo!()
     }
 
-    fn program(&mut self, filename: &std::path::Path) -> anyhow::Result<()> {
+    fn program(&mut self, _filename: &std::path::Path) -> anyhow::Result<()> {
         todo!()
     }
 

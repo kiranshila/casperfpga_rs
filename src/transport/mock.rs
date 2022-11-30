@@ -41,7 +41,7 @@ impl Transport for Mock {
         let dev = self
             .devices
             .get(device)
-            .ok_or(anyhow!("Device not found"))?;
+            .ok_or_else(|| anyhow!("Device not found"))?;
         // Construct the array
         let mut bytes = [0u8; N];
         for i in offset..(offset + N) {
@@ -49,7 +49,7 @@ impl Transport for Mock {
             let byte = self
                 .memory
                 .get(&(dev.addr + i))
-                .ok_or(anyhow!("Out of bounds indexing"))?;
+                .ok_or_else(|| anyhow!("Out of bounds indexing"))?;
             bytes[i - offset] = *byte;
         }
         Ok(bytes)
@@ -60,11 +60,11 @@ impl Transport for Mock {
         let dev = self
             .devices
             .get(device)
-            .ok_or(anyhow!("Device not found"))?;
+            .ok_or_else(|| anyhow!("Device not found"))?;
         if dev.length - offset < data.len() {
             bail!("Attempting to write to a nonexisten address");
         }
-        for (i, byte) in data.into_iter().enumerate() {
+        for (i, byte) in data.iter().enumerate() {
             self.memory.insert(dev.addr + i + offset, *byte);
         }
         Ok(())
@@ -74,12 +74,37 @@ impl Transport for Mock {
         Ok(self.devices.clone())
     }
 
-    fn program(&mut self, filename: &std::path::Path) -> anyhow::Result<()> {
+    fn program(&mut self, _filename: &std::path::Path) -> anyhow::Result<()> {
         todo!()
     }
 
     fn deprogram(&mut self) -> anyhow::Result<()> {
         todo!()
+    }
+
+    fn read<T, const N: usize>(&mut self, device: &str, offset: usize) -> anyhow::Result<T>
+    where
+        T: super::Deserialize<Chunk = [u8; N]>,
+    {
+        let bytes: [u8; N] = self.read_bytes(device, offset)?;
+        T::deserialize(bytes)
+    }
+
+    fn write<T, const N: usize>(
+        &mut self,
+        device: &str,
+        offset: usize,
+        data: &T,
+    ) -> anyhow::Result<()>
+    where
+        T: super::Serialize<Chunk = [u8; N]>,
+    {
+        // Create bytes from the data and write with `write_bytes`
+        self.write_bytes(device, offset, &data.serialize())
+    }
+
+    fn temperature(&mut self) -> anyhow::Result<f32> {
+        unimplemented!()
     }
 }
 
@@ -177,9 +202,9 @@ mod tests {
     test_rw_num!(u128, 0xDEAD_BEEF_B0BA_CAFE_0000_0000_0000);
     test_rw_num!(i8, -42);
     test_rw_num!(i16, -0xDEA);
-    test_rw_num!(i32, -0xDEAD_BEE);
-    test_rw_num!(i64, -0xDEAD_BEEF_B0BA_CAF);
+    test_rw_num!(i32, -0x0DEA_DBEE);
+    test_rw_num!(i64, -0x0DEA_DBEE_FB0B_ACAF);
     test_rw_num!(i128, -0xDEAD_BEEF_B0BA_CAFE_0000_0000_0000);
-    test_rw_num!(f32, 3.1415926);
+    test_rw_num!(f32, 1.618);
     test_rw_num!(f64, -6.022e23);
 }
