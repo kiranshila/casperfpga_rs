@@ -110,8 +110,11 @@ impl Transport for Tapcp {
             .try_into()
             .expect("This will always be N long"))
     }
+}
 
-    fn temperature(&mut self) -> anyhow::Result<f32> {
+impl Tapcp {
+    /// Gets the temperature from the connected device in Celsius
+    pub fn temperature(&mut self) -> anyhow::Result<f32> {
         tapcp::temp(&mut self.0)
     }
 }

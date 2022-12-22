@@ -133,10 +133,4 @@ pub trait Transport {
 
     /// Deprograms the connected platform
     fn deprogram(&mut self) -> anyhow::Result<()>;
-
-    /// Gets the temperature of the device in celcius
-    /// By default, this is unimplemented and therefore optional
-    fn temperature(&mut self) -> anyhow::Result<f32> {
-        unimplemented!()
-    }
 }
