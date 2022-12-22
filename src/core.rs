@@ -1,5 +1,8 @@
 //! The core types and functions for interacting with CasperFpga objects
 
+use anyhow::bail;
+
+use crate::transport::{tapcp::Tapcp, Transport};
 use std::collections::HashMap;
 
 /// The representation of an interal "yellow block" device, returned from `listdev`
@@ -13,3 +16,21 @@ pub struct Device {
 
 /// The mapping from yellow block device names and their `Device` parameters
 pub type DeviceMap = HashMap<String, Device>;
+
+/// The Core type of CasperFPGA. This encapsulates the transport method and holds the record of the "current" devices.
+pub struct CasperFpga<T> {
+    transport: T,
+    devices: DeviceMap,
+}
+
+// FIXME
+impl CasperFpga<Tapcp> {
+    pub fn new(mut transport: Tapcp) -> anyhow::Result<Self> {
+        if transport.is_running()? {
+            let devices = transport.listdev()?;
+            Ok(CasperFpga { transport, devices })
+        } else {
+            bail!("FPGA is not running")
+        }
+    }
+}

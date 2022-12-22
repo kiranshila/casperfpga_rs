@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tapcp = {version = "0.1", git = "https://github.com/kiranshila/tapcp_rs.git"}
 thiserror = "1"
 anyhow = "1"
 paste = "1"
 packed_struct = "0.10"
 pyo3 = { version = "0.17", features = ["extension-module"] }
+nom = "7.1.1"
 
 [lib]
 name = "casperfpga"
@@ -19,5 +19,9 @@ crate-type = ["cdylib"]
 path = "casperfpga_derive"
 version = "0.1.0"
 
+[dependencies.tapcp]
+path = "tapcp"
+version = "0.1.0"
+
 [workspace]
-members = ["casperfpga_derive"]
+members = ["casperfpga_derive", "tapcp"]

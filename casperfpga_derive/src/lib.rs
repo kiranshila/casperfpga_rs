@@ -40,7 +40,7 @@ pub fn address(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let generated = quote! {
         impl #ident {
-            fn addr(&self) -> u8 {
+            fn addr() -> u8 {
                 #num as u8
             }
         }

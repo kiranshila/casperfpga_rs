@@ -20,7 +20,7 @@ impl Mock {
 
         for (_, Device { addr, length }) in devices.iter() {
             for i in 0..*length {
-                memory.insert((addr + i) as usize, 0u8);
+                memory.insert(addr + i, 0u8);
             }
         }
         Self { devices, memory }
@@ -55,6 +55,14 @@ impl Transport for Mock {
         Ok(bytes)
     }
 
+    fn read<T, const N: usize>(&mut self, device: &str, offset: usize) -> anyhow::Result<T>
+    where
+        T: super::Deserialize<Chunk = [u8; N]>,
+    {
+        let bytes: [u8; N] = self.read_bytes(device, offset)?;
+        T::deserialize(bytes)
+    }
+
     fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()> {
         // Get the address in memory
         let dev = self
@@ -70,26 +78,6 @@ impl Transport for Mock {
         Ok(())
     }
 
-    fn listdev(&mut self) -> anyhow::Result<DeviceMap> {
-        Ok(self.devices.clone())
-    }
-
-    fn program(&mut self, _filename: &std::path::Path) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    fn deprogram(&mut self) -> anyhow::Result<()> {
-        todo!()
-    }
-
-    fn read<T, const N: usize>(&mut self, device: &str, offset: usize) -> anyhow::Result<T>
-    where
-        T: super::Deserialize<Chunk = [u8; N]>,
-    {
-        let bytes: [u8; N] = self.read_bytes(device, offset)?;
-        T::deserialize(bytes)
-    }
-
     fn write<T, const N: usize>(
         &mut self,
         device: &str,
@@ -101,6 +89,18 @@ impl Transport for Mock {
     {
         // Create bytes from the data and write with `write_bytes`
         self.write_bytes(device, offset, &data.serialize())
+    }
+
+    fn listdev(&mut self) -> anyhow::Result<DeviceMap> {
+        Ok(self.devices.clone())
+    }
+
+    fn program(&mut self, _filename: &std::path::Path) -> anyhow::Result<()> {
+        todo!()
+    }
+
+    fn deprogram(&mut self) -> anyhow::Result<()> {
+        todo!()
     }
 
     fn temperature(&mut self) -> anyhow::Result<f32> {
