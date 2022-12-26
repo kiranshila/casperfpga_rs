@@ -1,8 +1,8 @@
 //! The core types and functions for interacting with CasperFpga objects
 
-use anyhow::bail;
-
 use crate::transport::{tapcp::Tapcp, Transport};
+use anyhow::bail;
+use kstring::KString;
 use std::collections::HashMap;
 
 /// The representation of an interal "yellow block" device, returned from `listdev`
@@ -15,7 +15,7 @@ pub struct Device {
 }
 
 /// The mapping from yellow block device names and their `Device` parameters
-pub type DeviceMap = HashMap<String, Device>;
+pub type DeviceMap = HashMap<KString, Device>;
 
 /// The Core type of CasperFPGA. This encapsulates the transport method and holds the record of the "current" devices.
 pub struct CasperFpga<T> {

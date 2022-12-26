@@ -102,10 +102,6 @@ impl Transport for Mock {
     fn deprogram(&mut self) -> anyhow::Result<()> {
         todo!()
     }
-
-    fn temperature(&mut self) -> anyhow::Result<f32> {
-        unimplemented!()
-    }
 }
 
 #[cfg(test)]
@@ -119,7 +115,7 @@ mod tests {
                 #[test]
                 fn [<test_rw_$num>]() {
                     let mut transport = Mock::new(HashMap::from([(
-                        "sys_scratchpad".to_owned(),
+                        "sys_scratchpad".into(),
                         Device { addr: 0, length: core::mem::size_of::<$num>() },
                     )]));
                     let num: $num = $v;
@@ -134,7 +130,7 @@ mod tests {
     #[test]
     fn test_read() {
         let mut transport = Mock::new(HashMap::from([(
-            "sys_scratchpad".to_owned(),
+            "sys_scratchpad".into(),
             Device { addr: 0, length: 4 },
         )]));
         let bytes = transport.read_bytes("sys_scratchpad", 0).unwrap();
@@ -144,7 +140,7 @@ mod tests {
     #[test]
     fn test_read_offset() {
         let mut transport = Mock::new(HashMap::from([(
-            "sys_scratchpad".to_owned(),
+            "sys_scratchpad".into(),
             Device { addr: 0, length: 4 },
         )]));
         let bytes = transport.read_bytes("sys_scratchpad", 2).unwrap();
@@ -154,7 +150,7 @@ mod tests {
     #[test]
     fn test_write_read() {
         let mut transport = Mock::new(HashMap::from([(
-            "sys_scratchpad".to_owned(),
+            "sys_scratchpad".into(),
             Device { addr: 0, length: 4 },
         )]));
         let write_bytes = [1, 2, 3, 4];
@@ -168,7 +164,7 @@ mod tests {
     #[test]
     fn test_write_read_offset() {
         let mut transport = Mock::new(HashMap::from([(
-            "sys_scratchpad".to_owned(),
+            "sys_scratchpad".into(),
             Device { addr: 0, length: 4 },
         )]));
         let write_bytes = [7, 8];
@@ -184,7 +180,7 @@ mod tests {
     #[test]
     fn test_const_size() {
         let mut transport = Mock::new(HashMap::from([(
-            "sys_scratchpad".to_owned(),
+            "sys_scratchpad".into(),
             Device { addr: 0, length: 4 },
         )]));
         let write_bytes = [1, 2, 3, 4];
