@@ -1,29 +1,29 @@
 //! Mock transport implementations used in testing the interface
 
 use super::Transport;
-use crate::core::{Device, DeviceMap};
+use crate::core::{Register, RegisterMap};
 use anyhow::{anyhow, bail};
 use std::collections::HashMap;
 
 /// A platform that mocks reads and writes, useful for testing
 pub struct Mock {
     memory: HashMap<usize, u8>,
-    devices: DeviceMap,
+    registers: RegisterMap,
 }
 
 impl Mock {
     /// Construct a new mock platform by providing a device map `devices`
-    pub fn new(devices: DeviceMap) -> Self {
+    pub fn new(registers: RegisterMap) -> Self {
         // We'll represent each address lazily instead of havig a dense array
         // but it really shouldn't matter
         let mut memory: HashMap<usize, u8> = Default::default();
 
-        for (_, Device { addr, length }) in devices.iter() {
+        for (_, Register { addr, length }) in registers.iter() {
             for i in 0..*length {
                 memory.insert(addr + i, 0u8);
             }
         }
-        Self { devices, memory }
+        Self { registers, memory }
     }
 }
 
@@ -39,7 +39,7 @@ impl Transport for Mock {
     ) -> anyhow::Result<[u8; N]> {
         // Get the address in memory
         let dev = self
-            .devices
+            .registers
             .get(device)
             .ok_or_else(|| anyhow!("Device not found"))?;
         // Construct the array
@@ -66,7 +66,7 @@ impl Transport for Mock {
     fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()> {
         // Get the address in memory
         let dev = self
-            .devices
+            .registers
             .get(device)
             .ok_or_else(|| anyhow!("Device not found"))?;
         if dev.length - offset < data.len() {
@@ -91,8 +91,8 @@ impl Transport for Mock {
         self.write_bytes(device, offset, &data.serialize())
     }
 
-    fn listdev(&mut self) -> anyhow::Result<DeviceMap> {
-        Ok(self.devices.clone())
+    fn listdev(&mut self) -> anyhow::Result<RegisterMap> {
+        Ok(self.registers.clone())
     }
 
     fn program(&mut self, _filename: &std::path::Path) -> anyhow::Result<()> {
@@ -116,7 +116,7 @@ mod tests {
                 fn [<test_rw_$num>]() {
                     let mut transport = Mock::new(HashMap::from([(
                         "sys_scratchpad".into(),
-                        Device { addr: 0, length: core::mem::size_of::<$num>() },
+                        Register { addr: 0, length: core::mem::size_of::<$num>() },
                     )]));
                     let num: $num = $v;
                     transport.write("sys_scratchpad", 0, &num).unwrap();
@@ -131,7 +131,7 @@ mod tests {
     fn test_read() {
         let mut transport = Mock::new(HashMap::from([(
             "sys_scratchpad".into(),
-            Device { addr: 0, length: 4 },
+            Register { addr: 0, length: 4 },
         )]));
         let bytes = transport.read_bytes("sys_scratchpad", 0).unwrap();
         assert_eq!(bytes, [0, 0, 0, 0]);
@@ -141,7 +141,7 @@ mod tests {
     fn test_read_offset() {
         let mut transport = Mock::new(HashMap::from([(
             "sys_scratchpad".into(),
-            Device { addr: 0, length: 4 },
+            Register { addr: 0, length: 4 },
         )]));
         let bytes = transport.read_bytes("sys_scratchpad", 2).unwrap();
         assert_eq!(bytes, [0, 0]);
@@ -151,7 +151,7 @@ mod tests {
     fn test_write_read() {
         let mut transport = Mock::new(HashMap::from([(
             "sys_scratchpad".into(),
-            Device { addr: 0, length: 4 },
+            Register { addr: 0, length: 4 },
         )]));
         let write_bytes = [1, 2, 3, 4];
         transport
@@ -165,7 +165,7 @@ mod tests {
     fn test_write_read_offset() {
         let mut transport = Mock::new(HashMap::from([(
             "sys_scratchpad".into(),
-            Device { addr: 0, length: 4 },
+            Register { addr: 0, length: 4 },
         )]));
         let write_bytes = [7, 8];
         transport
@@ -181,7 +181,7 @@ mod tests {
     fn test_const_size() {
         let mut transport = Mock::new(HashMap::from([(
             "sys_scratchpad".into(),
-            Device { addr: 0, length: 4 },
+            Register { addr: 0, length: 4 },
         )]));
         let write_bytes = [1, 2, 3, 4];
         transport

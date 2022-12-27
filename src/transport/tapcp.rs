@@ -1,7 +1,7 @@
 //! The casperfpga transport implementations for TAPCP
 
 use super::Transport;
-use crate::core::{Device, DeviceMap};
+use crate::core::{Register, RegisterMap};
 use anyhow::bail;
 use std::{
     net::{SocketAddr, UdpSocket},
@@ -64,14 +64,14 @@ impl Transport for Tapcp {
         Ok(())
     }
 
-    fn listdev(&mut self) -> anyhow::Result<DeviceMap> {
+    fn listdev(&mut self) -> anyhow::Result<RegisterMap> {
         let devices = tapcp::listdev(&mut self.0)?;
         Ok(devices
             .iter()
             .map(|(k, (addr, len))| {
                 (
                     k.clone(),
-                    Device {
+                    Register {
                         addr: *addr as usize,
                         length: *len as usize,
                     },

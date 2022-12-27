@@ -3,7 +3,7 @@
 pub mod mock;
 pub mod tapcp;
 
-use crate::core::DeviceMap;
+use crate::core::RegisterMap;
 use std::path::Path;
 
 /// Types that implement this trait can be serialized such that they can be written to FPGA software registers
@@ -126,7 +126,7 @@ pub trait Transport {
     }
 
     /// Retrieve a list of available devices on the (potentially programmed) connected platform
-    fn listdev(&mut self) -> anyhow::Result<DeviceMap>;
+    fn listdev(&mut self) -> anyhow::Result<RegisterMap>;
 
     /// Program a bitstream file from `filename` to the connected platform
     fn program(&mut self, filename: &Path) -> anyhow::Result<()>;
