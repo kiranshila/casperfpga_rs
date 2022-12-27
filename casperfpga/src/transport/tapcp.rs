@@ -1,10 +1,16 @@
 //! The casperfpga transport implementations for TAPCP
 
 use super::Transport;
-use crate::core::{Register, RegisterMap};
+use crate::core::{
+    Register,
+    RegisterMap,
+};
 use anyhow::bail;
 use std::{
-    net::{SocketAddr, UdpSocket},
+    net::{
+        SocketAddr,
+        UdpSocket,
+    },
     time::Duration,
 };
 
@@ -53,8 +59,8 @@ impl Transport for Tapcp {
 
     fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()> {
         // The inverted version of `read_vec`. The problem here is if we are not writing a 4 byte
-        // chunk (which we need to), we have to read the bytes that are already there and include them.
-        // Because we don't want to do this read when we don't have to, we will branch
+        // chunk (which we need to), we have to read the bytes that are already there and include
+        // them. Because we don't want to do this read when we don't have to, we will branch
         if (offset % 4) == 0 && (data.len() % 4) == 0 {
             // Just do the write
             tapcp::write_device(device, offset % 4, data, &mut self.0)?;

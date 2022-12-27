@@ -1,7 +1,10 @@
-//! Routines for interacting with CASPER software register yellow blocks. This uses the `fixed` crate to interact with fixed point numbers.
+//! Routines for interacting with CASPER software register yellow blocks. This uses the `fixed`
+//! crate to interact with fixed point numbers.
 
-use super::YellowBlock;
-use crate::bitstream::fpg::FpgDevice;
+use super::{
+    FpgDevice,
+    YellowBlock,
+};
 use anyhow::bail;
 
 /// The IO direction of this register
@@ -32,8 +35,10 @@ pub struct SoftwareRegister {
 }
 
 impl YellowBlock for SoftwareRegister {
+    const KIND: &'static str = "xps:sw_reg";
+
     fn from_fpg(device: &FpgDevice) -> anyhow::Result<Self> {
-        if device.kind != "xps:sw_reg" {
+        if device.kind != Self::KIND {
             bail!("Provided FpgDevice is not of the right kind");
         }
         let direction = match device.metadata.get("io_dir") {
@@ -61,7 +66,7 @@ impl YellowBlock for SoftwareRegister {
                     signed: true,
                 },
                 "2" => Kind::Bool,
-                _ => bail!("Missing FpgDevice metadata entry"),
+                _ => bail!("Malformed FpgDevice metadata entry"),
             }
         } else {
             bail!("Missing FpgDevice metadata entry")
@@ -86,6 +91,7 @@ mod tests {
                 ("bin_pts".into(), "0".to_owned()),
                 ("arith_types".into(), "0".to_owned()),
             ]),
+            register: todo!(),
         };
         let swreg = SoftwareRegister::from_fpg(&device).unwrap();
         assert_eq!(swreg.direction, Direction::FromProcessor);

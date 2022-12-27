@@ -8,5 +8,9 @@ syn = { version = "1.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
 
+[dependencies.casper_utils]
+path = "../casper_utils"
+version = "0.1.0"
+
 [lib]
 proc_macro = true

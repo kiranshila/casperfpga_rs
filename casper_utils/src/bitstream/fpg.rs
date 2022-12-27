@@ -1,25 +1,47 @@
 //! This module contains the logic for parsing and interpreting the CASPER-Specific FPG files
-
-use crate::core::Register;
 use anyhow::anyhow;
 use kstring::KString;
 use nom::{
-    bytes::complete::{tag, take_till},
+    bytes::complete::{
+        tag,
+        take_till,
+    },
     character::{
-        complete::{hex_digit1, line_ending, not_line_ending, space1},
+        complete::{
+            hex_digit1,
+            line_ending,
+            not_line_ending,
+            space1,
+        },
         is_space,
     },
     combinator::map_res,
     multi::many0,
-    sequence::{preceded, terminated},
+    sequence::{
+        preceded,
+        terminated,
+    },
     IResult,
 };
-use std::{collections::HashMap, fs::File, io::Read, path::Path, str::from_utf8};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::Read,
+    path::Path,
+    str::from_utf8,
+};
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct FpgRegister {
+    pub addr: u32,
+    pub size: u32,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct FpgDevice {
-    pub(crate) kind: String,
-    pub(crate) metadata: HashMap<KString, String>,
+    pub kind: String,
+    pub register: Option<FpgRegister>,
+    pub metadata: HashMap<KString, String>,
 }
 
 impl FpgDevice {
@@ -30,9 +52,8 @@ impl FpgDevice {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct FpgFile {
-    pub(crate) registers: HashMap<KString, Register>,
-    pub(crate) devices: HashMap<KString, FpgDevice>,
-    pub(crate) bitstream: Vec<u8>,
+    pub devices: HashMap<KString, FpgDevice>,
+    pub bitstream: Vec<u8>,
 }
 
 fn shebang(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -79,8 +100,8 @@ fn meta(input: &[u8]) -> IResult<&[u8], Metadata> {
         preceded(space1, terminated(not_line_ending, line_ending)),
         utf8_string,
     )(remaining)?;
-    // For some (unknown) reason, the metadata object path uses '/' for nested context, instead of '_' like the registers list
-    // To make them match (for later lookup), we'll replace them.
+    // For some (unknown) reason, the metadata object path uses '/' for nested context, instead of
+    // '_' like the registers list To make them match (for later lookup), we'll replace them.
     Ok((
         remaining,
         (device.replace('/', "_").into(), kind, meta_key, meta_value),
@@ -98,17 +119,9 @@ pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], FpgFile> {
     let (remaining, metas) = many0(meta)(remaining)?;
     let (bitstream, _) = quit(remaining)?;
 
-    let registers = registers
+    let mut registers: HashMap<KString, FpgRegister> = registers
         .into_iter()
-        .map(|(name, addr, size)| {
-            (
-                name.to_owned().into(),
-                Register {
-                    addr: addr as usize,
-                    length: size as usize,
-                },
-            )
-        })
+        .map(|(name, addr, size)| (name.to_owned().into(), FpgRegister { addr, size }))
         .collect();
 
     let mut devices: HashMap<KString, FpgDevice> = HashMap::new();
@@ -120,10 +133,11 @@ pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], FpgFile> {
             }
             None => {
                 devices.insert(
-                    name,
+                    name.clone(),
                     FpgDevice {
                         kind: kind.to_owned(),
                         metadata: HashMap::from_iter([(k.to_owned().into(), v.to_owned())]),
+                        register: registers.remove(&name),
                     },
                 );
             }
@@ -133,7 +147,6 @@ pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], FpgFile> {
     Ok((
         bitstream,
         FpgFile {
-            registers,
             devices,
             bitstream: bitstream.into(),
         },
@@ -210,16 +223,10 @@ mod tests {
 
         let (_, file) = fpg_file(&input).unwrap();
         assert_eq!(
-            *file.registers.get("tx_en").unwrap(),
-            Register {
-                addr: 217404,
-                length: 4
-            }
-        );
-        assert_eq!(
             *file.devices.get("SNAP").unwrap(),
             FpgDevice {
                 kind: "xps:xsg".to_owned(),
+                register: None,
                 metadata: HashMap::from_iter([("clk_rate".into(), "250".to_owned())])
             }
         );
@@ -227,6 +234,10 @@ mod tests {
             *file.devices.get("tx_en").unwrap(),
             FpgDevice {
                 kind: "xps:sw_reg".to_owned(),
+                register: Some(FpgRegister {
+                    addr: 217404,
+                    size: 4
+                }),
                 metadata: HashMap::from_iter([("bitwidths".into(), "32".to_owned())])
             }
         );

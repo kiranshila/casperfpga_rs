@@ -1,8 +1,33 @@
 //! Routines for interacting with the CASPER 10GbE Core
-use crate::transport::{Deserialize, Serialize};
-use casperfpga_derive::{address, CasperSerde};
-use packed_struct::{prelude::*, PackedStruct, PackingResult};
+use super::{
+    FpgDevice,
+    YellowBlock,
+};
+use crate::transport::{
+    Deserialize,
+    Serialize,
+};
+use casperfpga_derive::{
+    address,
+    CasperSerde,
+};
+use packed_struct::{
+    prelude::*,
+    PackedStruct,
+    PackingResult,
+};
 use std::net::Ipv4Addr;
+
+pub struct TenGbE {}
+
+impl YellowBlock for TenGbE {
+    const KIND: &'static str = "xps:ten_gbe";
+
+    fn from_fpg(device: &FpgDevice) -> anyhow::Result<Self> {
+        Ok(Self {})
+    }
+}
+
 // The details of the memory map here are magical and come from Jack H
 
 // The 10 GbE Core itself exists as a big register that we can query over the transports

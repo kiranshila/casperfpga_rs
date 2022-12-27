@@ -6,13 +6,15 @@ pub mod tapcp;
 use crate::core::RegisterMap;
 use std::path::Path;
 
-/// Types that implement this trait can be serialized such that they can be written to FPGA software registers
+/// Types that implement this trait can be serialized such that they can be written to FPGA software
+/// registers
 pub trait Serialize {
     type Chunk;
     fn serialize(&self) -> Self::Chunk;
 }
 
-/// Types that implement this trait can be deserialized such that they can be read from FPGA software registers
+/// Types that implement this trait can be deserialized such that they can be read from FPGA
+/// software registers
 pub trait Deserialize: Sized {
     type Chunk;
     fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self>;
@@ -80,13 +82,13 @@ pub trait Transport {
         offset: usize,
     ) -> anyhow::Result<[u8; N]>;
 
-    /// Generically read a `Deserializable` type `T` from the connected platform at `device` and offset `offset`.
-    /// # Example
+    /// Generically read a `Deserializable` type `T` from the connected platform at `device` and
+    /// offset `offset`. # Example
     /// ```
-    /// # use casperfpga::core::Device;
+    /// # use casperfpga::core::Register;
     /// # use std::collections::HashMap;
     /// # use casperfpga::transport::mock::Mock;
-    /// # let mut transport = Mock::new(HashMap::from([("sys_scratchpad".to_owned(),Device { addr: 0, length: 4 },)]));
+    /// # let mut transport = Mock::new(HashMap::from([("sys_scratchpad".into(),Register { addr: 0, length: 4 },)]));
     /// # use crate::casperfpga::transport::Transport;
     /// let my_num: u32 = transport.read("sys_scratchpad",0).unwrap();
     /// ```
@@ -101,13 +103,13 @@ pub trait Transport {
     /// Write `data` to `device` from byte offset `offset`
     fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()>;
 
-    /// Generically write a `Serializable` type `T` to the connected platform at `device` and offset `offset`.
-    /// # Example
+    /// Generically write a `Serializable` type `T` to the connected platform at `device` and offset
+    /// `offset`. # Example
     /// ```
-    /// # use casperfpga::core::Device;
+    /// # use casperfpga::core::Register;
     /// # use std::collections::HashMap;
     /// # use casperfpga::transport::mock::Mock;
-    /// # let mut transport = Mock::new(HashMap::from([("sys_scratchpad".to_owned(),Device { addr: 0, length: 4 },)]));
+    /// # let mut transport = Mock::new(HashMap::from([("sys_scratchpad".into(),Register { addr: 0, length: 4 },)]));
     /// # use crate::casperfpga::transport::Transport;
     /// let my_num = 3.14f32;
     /// transport.write("sys_scratchpad",0, &my_num).unwrap();
