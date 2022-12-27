@@ -18,8 +18,8 @@ use std::{collections::HashMap, fs::File, io::Read, path::Path, str::from_utf8};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct FpgDevice {
-    kind: String,
-    metadata: HashMap<KString, String>,
+    pub(crate) kind: String,
+    pub(crate) metadata: HashMap<KString, String>,
 }
 
 impl FpgDevice {
@@ -30,9 +30,9 @@ impl FpgDevice {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct FpgFile {
-    registers: HashMap<KString, Register>,
-    devices: HashMap<KString, FpgDevice>,
-    bitstream: Vec<u8>,
+    pub(crate) registers: HashMap<KString, Register>,
+    pub(crate) devices: HashMap<KString, FpgDevice>,
+    pub(crate) bitstream: Vec<u8>,
 }
 
 fn shebang(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -83,7 +83,7 @@ fn meta(input: &[u8]) -> IResult<&[u8], Metadata> {
     // To make them match (for later lookup), we'll replace them.
     Ok((
         remaining,
-        (device.replace("/", "_").into(), kind, meta_key, meta_value),
+        (device.replace('/', "_").into(), kind, meta_key, meta_value),
     ))
 }
 
@@ -91,7 +91,7 @@ fn quit(input: &[u8]) -> IResult<&[u8], &[u8]> {
     terminated(tag("?quit"), line_ending)(input)
 }
 
-fn fpg_file(input: &[u8]) -> IResult<&[u8], FpgFile> {
+pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], FpgFile> {
     let (remaining, _) = shebang(input)?;
     let (remaining, _) = uploadbin(remaining)?;
     let (remaining, registers) = many0(register)(remaining)?;
