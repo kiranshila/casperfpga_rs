@@ -1,15 +1,8 @@
 //! The core types and functions for interacting with CasperFpga objects
-use crate::transport::{
-    tapcp::Tapcp,
-    Transport,
-};
+use crate::transport::{tapcp::Tapcp, Transport};
 use anyhow::bail;
 use kstring::KString;
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    path::Path,
-};
+use std::{collections::HashMap, net::SocketAddr, path::Path};
 
 /// The representation of an interal register
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -47,5 +40,30 @@ impl CasperFpga<Tapcp> {
         } else {
             bail!("FPGA is not running")
         }
+    }
+}
+
+#[cfg(feature = "python")]
+mod python {
+    use crate::transport::tapcp::python::add_tapcp;
+    use pyo3::prelude::*;
+
+    #[pymodule]
+    // Build the module hierarchy to match this one
+    fn casperfpga(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+        register_child_modules(py, m)?;
+        Ok(())
+    }
+
+    fn register_child_modules(py: Python<'_>, parent_module: &PyModule) -> PyResult<()> {
+        let transport = PyModule::new(py, "transport")?;
+        let yellow_blocks = PyModule::new(py, "yellow_blocks")?;
+
+        // Add the members of each submodule
+        add_tapcp(py, transport)?;
+
+        parent_module.add_submodule(transport)?;
+        parent_module.add_submodule(yellow_blocks)?;
+        Ok(())
     }
 }

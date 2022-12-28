@@ -1,16 +1,10 @@
 //! The casperfpga transport implementations for TAPCP
 
 use super::Transport;
-use crate::core::{
-    Register,
-    RegisterMap,
-};
+use crate::core::{Register, RegisterMap};
 use anyhow::bail;
 use std::{
-    net::{
-        SocketAddr,
-        UdpSocket,
-    },
+    net::{SocketAddr, UdpSocket},
     time::Duration,
 };
 
@@ -76,7 +70,7 @@ impl Transport for Tapcp {
             .iter()
             .map(|(k, (addr, len))| {
                 (
-                    k.clone(),
+                    k.into(),
                     Register {
                         addr: *addr as usize,
                         length: *len as usize,
@@ -122,5 +116,51 @@ impl Tapcp {
     /// Gets the temperature from the connected device in Celsius
     pub fn temperature(&mut self) -> anyhow::Result<f32> {
         tapcp::temp(&mut self.0)
+    }
+}
+
+#[cfg(feature = "python")]
+pub(crate) mod python {
+    use crate::transport::Transport;
+    use pyo3::{
+        conversion::ToPyObject,
+        prelude::*,
+        types::{PyDict, PyList},
+    };
+    pub(crate) fn add_tapcp(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+        /// Transport via TAPCP - connects on construction
+        #[pyclass(text_signature = "(ip)")]
+        struct Tapcp(super::Tapcp);
+
+        #[pymethods]
+        impl Tapcp {
+            #[new]
+            fn new(ip: String) -> PyResult<Self> {
+                let inner = super::Tapcp::connect(ip.parse()?)?;
+                Ok(Tapcp(inner))
+            }
+
+            fn is_running(&mut self) -> PyResult<bool> {
+                Ok(self.0.is_running()?)
+            }
+
+            fn listdev(&mut self, py: Python<'_>) -> PyResult<PyObject> {
+                let devices: Vec<_> = self
+                    .0
+                    .listdev()?
+                    .into_keys()
+                    .map(|k| k.to_string())
+                    .collect();
+                Ok(devices.to_object(py))
+            }
+
+            #[pyo3(text_signature = "($self")]
+            fn temperature(&mut self) -> PyResult<f32> {
+                Ok(self.0.temperature()?)
+            }
+        }
+
+        m.add_class::<Tapcp>()?;
+        Ok(())
     }
 }
