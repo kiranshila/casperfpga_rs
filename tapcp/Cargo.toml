@@ -1,0 +1,16 @@
+[package]
+name = "tapcp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+async-tftp = "0.3"
+num-derive = "0.3"
+num-traits = "0.2"
+thiserror = "1"
+kstring = "2"
+
+[build-dependencies]
+bindgen = "0.61"
+cc = "1.0"

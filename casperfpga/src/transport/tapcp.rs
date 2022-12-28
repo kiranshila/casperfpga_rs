@@ -122,12 +122,8 @@ impl Tapcp {
 #[cfg(feature = "python")]
 pub(crate) mod python {
     use crate::transport::Transport;
-    use pyo3::{
-        conversion::ToPyObject,
-        prelude::*,
-        types::{PyDict, PyList},
-    };
-    pub(crate) fn add_tapcp(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+    use pyo3::{conversion::ToPyObject, prelude::*};
+    pub(crate) fn add_tapcp(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         /// Transport via TAPCP - connects on construction
         #[pyclass(text_signature = "(ip)")]
         struct Tapcp(super::Tapcp);
