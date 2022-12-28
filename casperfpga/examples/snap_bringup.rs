@@ -1,18 +1,14 @@
 //! In this example, we will connect to a SNAP over TAPCP, program a file, calibrate the ADCs, and
 //! setup the 10 GbE core.
 
-use std::collections::HashMap;
-
-use casperfpga::transport::mock::Mock;
+use casperfpga::transport::tapcp::Tapcp;
 use casperfpga_derive::fpga_from_fpg;
 
-fpga_from_fpg!(
-    GrexFpga,
-    "casperfpga/examples/grex_gateware_2022-10-18_1631.fpg"
-);
+fpga_from_fpg!(GrexFpga, "casperfpga/examples/grex_gateware.fpg");
 
 fn main() {
-    let transport = Mock::new(HashMap::new());
-    let fpga = GrexFpga::new(transport);
-    dbg!(fpga);
+    let transport = Tapcp::connect("192.168.0.3:69".parse().unwrap()).unwrap();
+    let fpga = GrexFpga::new(transport).unwrap();
+    let ip_addr = fpga.gbe1.device_ip().unwrap();
+    dbg!(ip_addr);
 }

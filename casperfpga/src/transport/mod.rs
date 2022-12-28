@@ -3,6 +3,8 @@
 pub mod mock;
 pub mod tapcp;
 
+use packed_struct::PackedStruct;
+
 use crate::core::RegisterMap;
 use std::path::Path;
 
@@ -68,6 +70,23 @@ deser_num!(i64);
 deser_num!(i128);
 deser_num!(f32);
 deser_num!(f64);
+
+// Serde for sized slice
+impl<const N: usize> Serialize for [u8; N] {
+    type Chunk = Self;
+
+    fn serialize(&self) -> Self::Chunk {
+        *self
+    }
+}
+
+impl<const N: usize> Deserialize for [u8; N] {
+    type Chunk = Self;
+
+    fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self> {
+        Ok(chunk)
+    }
+}
 
 /// The trait that is implemented for CASPER FPGA transport mechanisms.
 /// The methods of this trait *assume* that the device is already connected.

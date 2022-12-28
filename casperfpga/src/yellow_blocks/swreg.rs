@@ -4,8 +4,11 @@
 use crate::transport::Transport;
 use anyhow::bail;
 use std::{
-    cell::RefCell,
-    sync::Weak,
+    ops::Deref,
+    sync::{
+        Mutex,
+        Weak,
+    },
 };
 
 /// The IO direction of this register
@@ -30,7 +33,7 @@ pub enum Kind {
 #[derive(Debug)]
 pub struct SoftwareRegister<T> {
     /// Upwards pointer to the parent class' transport
-    transport: Weak<RefCell<T>>,
+    transport: Weak<Mutex<T>>,
     /// IO direction of this register
     direction: Direction,
     /// The kind of software register
@@ -44,7 +47,7 @@ where
     T: Transport,
 {
     pub fn from_fpg(
-        transport: Weak<RefCell<T>>,
+        transport: Weak<Mutex<T>>,
         reg_name: &str,
         io_dir: &str,
         bin_pts: &str,
@@ -79,9 +82,11 @@ where
         })
     }
 
-    pub fn read(&self) -> anyhow::Result<i64> {
-        let transport = self.transport.upgrade().unwrap();
-
-        todo!()
+    pub fn read(&self) -> anyhow::Result<u32> {
+        // TODO
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        // Perform the read
+        transport.read(&self.name, 0)
     }
 }

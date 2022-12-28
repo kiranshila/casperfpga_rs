@@ -14,28 +14,12 @@ use packed_struct::{
     PackingResult,
 };
 use std::{
-    cell::RefCell,
     net::Ipv4Addr,
-    sync::Weak,
+    sync::{
+        Mutex,
+        Weak,
+    },
 };
-
-#[derive(Debug)]
-pub struct TenGbE<T> {
-    transport: Weak<RefCell<T>>,
-    name: String,
-}
-
-impl<T> TenGbE<T>
-where
-    T: Transport,
-{
-    pub fn from_fpg(transport: Weak<RefCell<T>>, reg_name: &str) -> anyhow::Result<Self> {
-        Ok(Self {
-            transport,
-            name: reg_name.to_string(),
-        })
-    }
-}
 
 // The details of the memory map here are magical and come from Jack H
 
@@ -105,7 +89,7 @@ impl PackedStruct for MacAddress {
 
 macro_rules! ip_register {
     ($name:ident, $addr:literal) => {
-        #[derive(Debug)]
+        #[derive(Debug, CasperSerde)]
         #[address($addr)]
         pub struct $name(pub Ipv4Addr);
 
@@ -166,4 +150,29 @@ pub struct Status {
     // There's other (undocumented) stuff in here
     #[packed_field(bits = "0")]
     pub link_up: bool,
+}
+
+#[derive(Debug)]
+pub struct TenGbE<T> {
+    transport: Weak<Mutex<T>>,
+    name: String,
+}
+
+impl<T> TenGbE<T>
+where
+    T: Transport,
+{
+    pub fn from_fpg(transport: Weak<Mutex<T>>, reg_name: &str) -> anyhow::Result<Self> {
+        Ok(Self {
+            transport,
+            name: reg_name.to_string(),
+        })
+    }
+
+    pub fn device_ip(&self) -> anyhow::Result<Ipv4Addr> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        let ip: IpAddress = transport.read(&self.name, IpAddress::addr().into())?;
+        Ok(ip.0)
+    }
 }
