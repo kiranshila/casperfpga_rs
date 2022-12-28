@@ -1,4 +1,4 @@
-//! Logic and implementations for "Yellow Block" devices.
+//! Logic and implementations for CASPER "Yellow Block" devices.
 pub mod clockswitch;
 pub mod snapadc;
 pub mod swreg;

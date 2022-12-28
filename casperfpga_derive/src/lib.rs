@@ -1,24 +1,11 @@
-use casper_utils::bitstream::fpg::{
-    read_fpg_file,
-    FpgDevice,
-};
+use casper_utils::bitstream::fpg::{read_fpg_file, FpgDevice};
 use kstring::KString;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 use syn::{
-    parse::{
-        Parse,
-        ParseStream,
-    },
-    parse_macro_input,
-    DeriveInput,
-    Ident,
-    LitStr,
-    Token,
+    parse::{Parse, ParseStream},
+    parse_macro_input, DeriveInput, Ident, LitStr, Token,
 };
 
 #[proc_macro_derive(CasperSerde)]
@@ -47,6 +34,7 @@ pub fn derive_casper_serde(tokens: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+/// Implement the Address trait on this struct, allowing for automatic addressing when reading and writing
 pub fn address(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr = match syn::parse::<syn::Lit>(attr).expect("Error parsing attribute") {
         syn::Lit::Int(v) => v,
@@ -82,12 +70,29 @@ impl Parse for FpgFpga {
     }
 }
 
+fn fixed_type(dev: &FpgDevice) -> proc_macro2::TokenStream {
+    let bin_pts: u32 = dev
+        .metadata
+        .get("bin_pts")
+        .expect("Malformed FPG metadata")
+        .parse()
+        .expect("Binary point wasn't a number?");
+    let frac_ident = syn::parse_str::<Ident>(&format!("U{bin_pts}")).unwrap();
+    match dev.metadata.get("arith_types").unwrap().as_str() {
+        "0" => quote! {fixed::FixedU32::<fixed::types::extra::#frac_ident>},
+        "1" => quote! {fixed::FixedI32::<fixed::types::extra::#frac_ident>},
+        _ => unreachable!(),
+    }
+}
+
 fn disambiguate_sw_reg(dev: &FpgDevice) -> proc_macro2::TokenStream {
     // Unfortunatley, software registers are not uniquely determined by their fpg type, we need
     // additional metadata to know what rust types they become
     match dev.metadata.get("arith_types").unwrap().as_str() {
-        "0" => quote!(casperfpga::yellow_blocks::swreg::UFixedSoftwareRegister::<T>),
-        "1" => quote!(casperfpga::yellow_blocks::swreg::FixedSoftwareRegister::<T>),
+        "0" | "1" => {
+            let fixed_ty = fixed_type(dev);
+            quote!(casperfpga::yellow_blocks::swreg::FixedSoftwareRegister::<T, #fixed_ty>)
+        }
         "2" => quote!(casperfpga::yellow_blocks::swreg::BooleanSoftwareRegister::<T>),
         _ => unreachable!(),
     }
@@ -119,8 +124,7 @@ fn dev_to_constructor(name: &str, dev: &FpgDevice) -> Option<proc_macro2::TokenS
         // These need to match the key order from the device's `from_fpg` method
         match dev.kind.as_str() {
             "xps:sw_reg" => match dev.metadata.get("arith_types").unwrap().as_str() {
-                "0" => from_fpg!(io_dir, bin_pts),
-                "1" => from_fpg!(io_dir, bin_pts),
+                "0" | "1" => from_fpg!(io_dir, bitwidths),
                 "2" => from_fpg!(io_dir),
                 _ => unreachable!(),
             },

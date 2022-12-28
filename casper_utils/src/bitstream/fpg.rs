@@ -1,35 +1,19 @@
-//! This module contains the logic for parsing and interpreting the CASPER-Specific FPG files
+//! This module contains the logic for parsing and interpreting the CASPER-Specific FPG files.
+//! As there is no formal specification of this format, the parsing logic here uses the "implementation as spec"
 use anyhow::anyhow;
 use kstring::KString;
 use nom::{
-    bytes::complete::{
-        tag,
-        take_till,
-    },
+    bytes::complete::{tag, take_till},
     character::{
-        complete::{
-            hex_digit1,
-            line_ending,
-            not_line_ending,
-            space1,
-        },
+        complete::{hex_digit1, line_ending, not_line_ending, space1},
         is_space,
     },
     combinator::map_res,
     multi::many0,
-    sequence::{
-        preceded,
-        terminated,
-    },
+    sequence::{preceded, terminated},
     IResult,
 };
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::Read,
-    path::Path,
-    str::from_utf8,
-};
+use std::{collections::HashMap, fs::File, io::Read, path::Path, str::from_utf8};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct FpgRegister {
