@@ -1,9 +1,6 @@
 //! Defines all the transport mechanisms for which all casperfpga transports must implement
-
 pub mod mock;
 pub mod tapcp;
-
-use packed_struct::PackedStruct;
 
 use crate::{
     core::RegisterMap,

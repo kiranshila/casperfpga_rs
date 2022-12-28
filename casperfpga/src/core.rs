@@ -23,16 +23,11 @@ pub struct Register {
 /// The mapping from register names and their data (address and size)
 pub type RegisterMap = HashMap<KString, Register>;
 
-/// The Core type of CasperFPGA. This encapsulates the transport method and holds the record of the
-/// "current" devices.
+/// The default type of CasperFPGA. This encapsulates the transport method and holds the record of
+/// the "current" devices, but provides no high level typesafe interfaces into yellow blocks.
 pub struct CasperFpga<T> {
-    pub transport: std::sync::Arc<T>,
-    registers: RegisterMap,
-    foo: Foo<T>,
-}
-
-struct Foo<T> {
-    transport: std::sync::Weak<T>,
+    pub transport: T,
+    pub registers: RegisterMap,
 }
 
 // Constructors
@@ -45,14 +40,9 @@ impl CasperFpga<Tapcp> {
         let mut transport = Tapcp::connect(host)?;
         if transport.is_running()? {
             let registers = transport.listdev()?;
-            let tarc = std::sync::Arc::new(transport);
-            let foo = Foo {
-                transport: std::sync::Arc::downgrade(&tarc),
-            };
             Ok(CasperFpga {
-                transport: tarc,
+                transport,
                 registers,
-                foo,
             })
         } else {
             bail!("FPGA is not running")

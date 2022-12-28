@@ -9,6 +9,6 @@ fpga_from_fpg!(GrexFpga, "casperfpga/examples/grex_gateware.fpg");
 fn main() {
     let transport = Tapcp::connect("192.168.0.3:69".parse().unwrap()).unwrap();
     let fpga = GrexFpga::new(transport).unwrap();
-    let ip_addr = fpga.gbe1.device_ip().unwrap();
-    dbg!(ip_addr);
+    dbg!(fpga.gbe1.device_ip().unwrap());
+    dbg!(fpga.fft_overflow_cnt.read().unwrap());
 }

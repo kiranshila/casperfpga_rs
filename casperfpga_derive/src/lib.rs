@@ -82,11 +82,20 @@ impl Parse for FpgFpga {
     }
 }
 
-fn kind_to_type(kind: &str) -> Option<proc_macro2::TokenStream> {
-    match kind {
-        "xps:sw_reg" => Some(quote!(
-            casperfpga::yellow_blocks::swreg::SoftwareRegister::<T>
-        )),
+fn disambiguate_sw_reg(dev: &FpgDevice) -> proc_macro2::TokenStream {
+    // Unfortunatley, software registers are not uniquely determined by their fpg type, we need
+    // additional metadata to know what rust types they become
+    match dev.metadata.get("arith_types").unwrap().as_str() {
+        "0" => quote!(casperfpga::yellow_blocks::swreg::UFixedSoftwareRegister::<T>),
+        "1" => quote!(casperfpga::yellow_blocks::swreg::FixedSoftwareRegister::<T>),
+        "2" => quote!(casperfpga::yellow_blocks::swreg::BooleanSoftwareRegister::<T>),
+        _ => unreachable!(),
+    }
+}
+
+fn kind_to_type(dev: &FpgDevice) -> Option<proc_macro2::TokenStream> {
+    match dev.kind.as_str() {
+        "xps:sw_reg" => Some(disambiguate_sw_reg(dev)),
         "xps:ten_gbe" => Some(quote!(casperfpga::yellow_blocks::ten_gbe::TenGbE::<T>)),
         // Ignore the types that don't have mappings to yellow block implementations
         _ => None,
@@ -94,7 +103,7 @@ fn kind_to_type(kind: &str) -> Option<proc_macro2::TokenStream> {
 }
 
 fn dev_to_constructor(name: &str, dev: &FpgDevice) -> Option<proc_macro2::TokenStream> {
-    if let Some(ty) = kind_to_type(&dev.kind) {
+    if let Some(ty) = kind_to_type(dev) {
         let ident = syn::parse_str::<Ident>(name).unwrap_or_else(|_| {
             panic!("FPGA register name `{name}` is not a valid rust identifier")
         });
@@ -109,7 +118,12 @@ fn dev_to_constructor(name: &str, dev: &FpgDevice) -> Option<proc_macro2::TokenS
         }
         // These need to match the key order from the device's `from_fpg` method
         match dev.kind.as_str() {
-            "xps:sw_reg" => from_fpg!(io_dir, bin_pts, arith_types),
+            "xps:sw_reg" => match dev.metadata.get("arith_types").unwrap().as_str() {
+                "0" => from_fpg!(io_dir, bin_pts),
+                "1" => from_fpg!(io_dir, bin_pts),
+                "2" => from_fpg!(io_dir),
+                _ => unreachable!(),
+            },
             "xps:ten_gbe" => from_fpg!(),
             // Ignore the types that don't have mappings to yellow block implementations
             _ => None,
@@ -129,7 +143,7 @@ fn generate_struct_fields(devices: &HashMap<KString, FpgDevice>) -> Vec<proc_mac
             let ident = syn::parse_str::<Ident>(name.as_str()).unwrap_or_else(|_| {
                 panic!("FPGA register name `{name}` is not a valid rust identifier")
             });
-            kind_to_type(&dev.kind).map(|ty| {
+            kind_to_type(dev).map(|ty| {
                 quote! {
                     #ident: #ty
                 }
@@ -148,7 +162,7 @@ fn generate_field_names(devices: &HashMap<KString, FpgDevice>) -> Vec<Ident> {
             let ident = syn::parse_str::<Ident>(name.as_str()).unwrap_or_else(|_| {
                 panic!("FPGA register name `{name}` is not a valid rust identifier")
             });
-            kind_to_type(&dev.kind).map(|_| ident)
+            kind_to_type(dev).map(|_| ident)
         })
         .collect()
 }
