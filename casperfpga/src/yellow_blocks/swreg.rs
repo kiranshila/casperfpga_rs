@@ -1,10 +1,12 @@
 //! Routines for interacting with CASPER software register yellow blocks. This uses the `fixed`
 //! crate to interact with fixed point numbers.
 
-use std::sync::Weak;
-
 use crate::transport::Transport;
 use anyhow::bail;
+use std::{
+    cell::RefCell,
+    sync::Weak,
+};
 
 /// The IO direction of this register
 #[derive(Debug, PartialEq, Eq)]
@@ -28,7 +30,7 @@ pub enum Kind {
 #[derive(Debug)]
 pub struct SoftwareRegister<T> {
     /// Upwards pointer to the parent class' transport
-    transport: Weak<T>,
+    transport: Weak<RefCell<T>>,
     /// IO direction of this register
     direction: Direction,
     /// The kind of software register
@@ -42,7 +44,7 @@ where
     T: Transport,
 {
     pub fn from_fpg(
-        transport: Weak<T>,
+        transport: Weak<RefCell<T>>,
         reg_name: &str,
         io_dir: &str,
         bin_pts: &str,
@@ -76,33 +78,10 @@ where
             name: reg_name.to_string(),
         })
     }
+
+    pub fn read(&self) -> anyhow::Result<i64> {
+        let transport = self.transport.upgrade().unwrap();
+
+        todo!()
+    }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::collections::HashMap;
-
-//     #[test]
-//     fn test_from_fpg() {
-//         let device = FpgDevice {
-//             kind: "xps:sw_reg".to_owned(),
-//             metadata: HashMap::from_iter([
-//                 ("io_dir".into(), "From\\_Processor".to_owned()),
-//                 ("io_delay".into(), "0".to_owned()),
-//                 ("bin_pts".into(), "0".to_owned()),
-//                 ("arith_types".into(), "0".to_owned()),
-//             ]),
-//             register: todo!(),
-//         };
-//         let swreg = SoftwareRegister::from_fpg(&device).unwrap();
-//         assert_eq!(swreg.direction, Direction::FromProcessor);
-//         assert_eq!(
-//             swreg.kind,
-//             Kind::Fixed {
-//                 bin_pts: 0,
-//                 signed: false
-//             }
-//         );
-//     }
-// }

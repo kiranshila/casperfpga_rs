@@ -182,7 +182,7 @@ pub fn fpga_from_fpg(tokens: TokenStream) -> TokenStream {
     let generated = quote! {
         #[derive(Debug)]
         struct #name<T> {
-            transport: std::sync::Arc<T>,
+            transport: std::sync::Arc<std::cell::RefCell<T>>,
             #(#struct_fields),*
         }
 
@@ -192,7 +192,7 @@ pub fn fpga_from_fpg(tokens: TokenStream) -> TokenStream {
         {
             pub fn new(transport: T) -> anyhow::Result<Self> {
                 // Create the Arc for the transport
-                let tarc = std::sync::Arc::new(transport);
+                let tarc = std::sync::Arc::new(std::cell::RefCell::new(transport));
                 // And create the weak to pass to the yellow blocks
                 let tweak = std::sync::Arc::downgrade(&tarc);
                 // For every fpg device, run its `from_fpg` method

@@ -14,13 +14,14 @@ use packed_struct::{
     PackingResult,
 };
 use std::{
+    cell::RefCell,
     net::Ipv4Addr,
     sync::Weak,
 };
 
 #[derive(Debug)]
 pub struct TenGbE<T> {
-    transport: Weak<T>,
+    transport: Weak<RefCell<T>>,
     name: String,
 }
 
@@ -28,7 +29,7 @@ impl<T> TenGbE<T>
 where
     T: Transport,
 {
-    pub fn from_fpg(transport: Weak<T>, reg_name: &str) -> anyhow::Result<Self> {
+    pub fn from_fpg(transport: Weak<RefCell<T>>, reg_name: &str) -> anyhow::Result<Self> {
         Ok(Self {
             transport,
             name: reg_name.to_string(),
