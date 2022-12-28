@@ -1,8 +1,15 @@
 //! The core types and functions for interacting with CasperFpga objects
-use crate::transport::{tapcp::Tapcp, Transport};
+use crate::transport::{
+    tapcp::Tapcp,
+    Transport,
+};
 use anyhow::bail;
 use kstring::KString;
-use std::{collections::HashMap, net::SocketAddr, path::Path};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    path::Path,
+};
 
 /// The representation of an interal register
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

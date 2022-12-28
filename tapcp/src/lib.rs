@@ -2,7 +2,11 @@ mod csl;
 pub mod tftp;
 
 use anyhow::bail;
-use std::{collections::HashMap, ffi::CStr, net::UdpSocket};
+use std::{
+    collections::HashMap,
+    ffi::CStr,
+    net::UdpSocket,
+};
 use tftp::Mode;
 
 /// Gets the temperature of the remote device in Celsius

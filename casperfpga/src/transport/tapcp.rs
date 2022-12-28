@@ -1,10 +1,16 @@
 //! The casperfpga transport implementations for TAPCP
 
 use super::Transport;
-use crate::core::{Register, RegisterMap};
+use crate::core::{
+    Register,
+    RegisterMap,
+};
 use anyhow::bail;
 use std::{
-    net::{SocketAddr, UdpSocket},
+    net::{
+        SocketAddr,
+        UdpSocket,
+    },
     time::Duration,
 };
 
@@ -122,7 +128,10 @@ impl Tapcp {
 #[cfg(feature = "python")]
 pub(crate) mod python {
     use crate::transport::Transport;
-    use pyo3::{conversion::ToPyObject, prelude::*};
+    use pyo3::{
+        conversion::ToPyObject,
+        prelude::*,
+    };
     pub(crate) fn add_tapcp(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         /// Transport via TAPCP - connects on construction
         #[pyclass(text_signature = "(ip)")]

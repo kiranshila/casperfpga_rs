@@ -1,16 +1,16 @@
 //! # Software Register
 //!
-//! This block is a semi-unidirectional 32-bit register shared between the FPGA design and a client application.
-//! The design itself can specify a custom bitwidth up to 32 bits, but I/O will always be to 32 bits, bailing
-//! at runtime on overflow conditions.
+//! This block is a semi-unidirectional 32-bit register shared between the FPGA design and a client
+//! application. The design itself can specify a custom bitwidth up to 32 bits, but I/O will always
+//! be to 32 bits, bailing at runtime on overflow conditions.
 //!
-//! There are two unique types for this register, signed fixed point ([FixedSoftwareRegister]) and boolean
-//! ([BooleanSoftwareRegister]). Both of these types will have read
+//! There are two unique types for this register, signed fixed point ([FixedSoftwareRegister]) and
+//! boolean ([BooleanSoftwareRegister]). Both of these types will have read
 //! and write methods, bailing on write if [Direction] isn't [Direction::FromProcessor].
 //!
 //! Interactions with this block require the use of types from the [fixed](https://docs.rs/fixed/latest/fixed/) crate,
-//! and are currently a little clunky as that crate hasn't fully updated to use const-generics for the binary point. This
-//! will improve once those features arrive in rust stable.
+//! and are currently a little clunky as that crate hasn't fully updated to use const-generics for
+//! the binary point. This will improve once those features arrive in rust stable.
 //!
 //! ## Toolflow Documentation
 //! <https://casper-toolflow.readthedocs.io/en/latest/src/blockdocs/Software_register.html>
@@ -18,8 +18,14 @@
 use crate::transport::Transport;
 use anyhow::bail;
 use fixed::traits::Fixed;
-use std::marker::PhantomData;
-use std::sync::{Arc, Mutex, Weak};
+use std::{
+    marker::PhantomData,
+    sync::{
+        Arc,
+        Mutex,
+        Weak,
+    },
+};
 
 /// The IO direction of this register
 #[derive(Debug, PartialEq, Eq)]
@@ -173,10 +179,16 @@ where
 
 #[cfg(test)]
 mod tests {
-    use fixed::types::{I25F7, U27F5};
+    use fixed::types::{
+        I25F7,
+        U27F5,
+    };
 
     use super::*;
-    use crate::{core::Register, transport::mock::Mock};
+    use crate::{
+        core::Register,
+        transport::mock::Mock,
+    };
     use std::collections::HashMap;
 
     #[test]

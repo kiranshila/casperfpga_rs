@@ -1,11 +1,24 @@
-use casper_utils::bitstream::fpg::{read_fpg_file, FpgDevice};
+use casper_utils::bitstream::fpg::{
+    read_fpg_file,
+    FpgDevice,
+};
 use kstring::KString;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+};
 use syn::{
-    parse::{Parse, ParseStream},
-    parse_macro_input, DeriveInput, Ident, LitStr, Token,
+    parse::{
+        Parse,
+        ParseStream,
+    },
+    parse_macro_input,
+    DeriveInput,
+    Ident,
+    LitStr,
+    Token,
 };
 
 #[proc_macro_derive(CasperSerde)]
@@ -34,7 +47,8 @@ pub fn derive_casper_serde(tokens: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-/// Implement the Address trait on this struct, allowing for automatic addressing when reading and writing
+/// Implement the Address trait on this struct, allowing for automatic addressing when reading and
+/// writing
 pub fn address(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr = match syn::parse::<syn::Lit>(attr).expect("Error parsing attribute") {
         syn::Lit::Int(v) => v,
