@@ -1,11 +1,5 @@
 # tapcp_rs
 
-[![license](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue?style=flat-square)](#license)
-[![docs](https://img.shields.io/docsrs/tapcp?logo=rust&style=flat-square)](https://docs.rs/tapcp/latest/tapcp/index.html)
-[![rustc](https://img.shields.io/badge/rustc-1.57+-blue?style=flat-square&logo=rust)](https://www.rust-lang.org)
-[![build status](https://img.shields.io/github/workflow/status/kiranshila/tapcp_rs/CI/main?style=flat-square&logo=github)](https://github.com/kiranshila/tapcp_rs/actions)
-[![Codecov](https://img.shields.io/codecov/c/github/kiranshila/tapcp_rs?style=flat-square)](https://app.codecov.io/gh/kiranshila/tapcp_rs)
-
 A rust implementation of the [TAPCP](https://github.com/casper-astro/mlib_devel/blob/m2021a/jasper_library/sw/jam/casper_tapcp.c) protocol for interacting with certain CASPER Collaboration FPGA boards.
 
 Currently not quite feature complete, mainly missing interactions with the flash memory.
