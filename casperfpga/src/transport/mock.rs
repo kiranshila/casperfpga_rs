@@ -12,6 +12,7 @@ use anyhow::{
 use std::collections::HashMap;
 
 /// A platform that mocks reads and writes, useful for testing
+#[derive(Debug)]
 pub struct Mock {
     memory: HashMap<usize, u8>,
     registers: RegisterMap,

@@ -1,11 +1,8 @@
 //! Routines for interacting with the CASPER 10GbE Core
-use super::{
-    FpgDevice,
-    YellowBlock,
-};
 use crate::transport::{
     Deserialize,
     Serialize,
+    Transport,
 };
 use casperfpga_derive::{
     address,
@@ -16,15 +13,26 @@ use packed_struct::{
     PackedStruct,
     PackingResult,
 };
-use std::net::Ipv4Addr;
+use std::{
+    net::Ipv4Addr,
+    sync::Weak,
+};
 
-pub struct TenGbE {}
+#[derive(Debug)]
+pub struct TenGbE<T> {
+    transport: Weak<T>,
+    name: String,
+}
 
-impl YellowBlock for TenGbE {
-    const KIND: &'static str = "xps:ten_gbe";
-
-    fn from_fpg(device: &FpgDevice) -> anyhow::Result<Self> {
-        Ok(Self {})
+impl<T> TenGbE<T>
+where
+    T: Transport,
+{
+    pub fn from_fpg(transport: Weak<T>, reg_name: &str) -> anyhow::Result<Self> {
+        Ok(Self {
+            transport,
+            name: reg_name.to_string(),
+        })
     }
 }
 
