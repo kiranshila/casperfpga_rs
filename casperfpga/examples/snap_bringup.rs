@@ -1,7 +1,7 @@
 //! In this example, we will connect to a SNAP over TAPCP, program a file, calibrate the ADCs, and
 //! setup the 10 GbE core.
 
-use casperfpga::transport::{tapcp::Tapcp, Transport};
+use casperfpga::transport::tapcp::Tapcp;
 use casperfpga_derive::fpga_from_fpg;
 use fixed::types::U27F5;
 
