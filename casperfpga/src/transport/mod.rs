@@ -5,7 +5,10 @@ pub mod tapcp;
 
 use packed_struct::PackedStruct;
 
-use crate::core::RegisterMap;
+use crate::{
+    core::RegisterMap,
+    yellow_blocks::Address,
+};
 use std::path::Path;
 
 /// Types that implement this trait can be serialized such that they can be written to FPGA software
@@ -102,7 +105,8 @@ pub trait Transport {
     ) -> anyhow::Result<[u8; N]>;
 
     /// Generically read a `Deserializable` type `T` from the connected platform at `device` and
-    /// offset `offset`. # Example
+    /// offset `offset`.
+    /// # Example
     /// ```
     /// # use casperfpga::core::Register;
     /// # use std::collections::HashMap;
@@ -119,11 +123,22 @@ pub trait Transport {
         T::deserialize(bytes)
     }
 
+    /// Generically read a `Deserializable` + `Address` type `T` from the connected platform at
+    /// `device` and offset specified in the type's address.
+    fn read_addr<T, const N: usize>(&mut self, device: &str) -> anyhow::Result<T>
+    where
+        T: Deserialize<Chunk = [u8; N]> + Address,
+    {
+        let bytes: [u8; N] = self.read_bytes(device, T::addr() as usize)?;
+        T::deserialize(bytes)
+    }
+
     /// Write `data` to `device` from byte offset `offset`
     fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()>;
 
     /// Generically write a `Serializable` type `T` to the connected platform at `device` and offset
-    /// `offset`. # Example
+    /// `offset`.
+    /// # Example
     /// ```
     /// # use casperfpga::core::Register;
     /// # use std::collections::HashMap;
@@ -144,6 +159,16 @@ pub trait Transport {
     {
         // Create bytes from the data and write with `write_bytes`
         self.write_bytes(device, offset, &data.serialize())
+    }
+
+    /// Generically write a `Deserializable` + `Address` type `T` from the connected platform at
+    /// `device` and offset specified in the type's address.
+    fn write_addr<T, const N: usize>(&mut self, device: &str, data: &T) -> anyhow::Result<()>
+    where
+        T: Serialize<Chunk = [u8; N]> + Address,
+    {
+        // Create bytes from the data and write with `write_bytes`
+        self.write_bytes(device, T::addr() as usize, &data.serialize())
     }
 
     /// Retrieve a list of available devices on the (potentially programmed) connected platform

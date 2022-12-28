@@ -58,7 +58,7 @@ pub fn address(attr: TokenStream, item: TokenStream) -> TokenStream {
     let ident = item.clone().ident;
 
     let generated = quote! {
-        impl #ident {
+        impl Address for #ident {
             fn addr() -> u8 {
                 #num as u8
             }

@@ -1,8 +1,11 @@
 //! Routines for interacting with the CASPER 10GbE Core
-use crate::transport::{
-    Deserialize,
-    Serialize,
-    Transport,
+use crate::{
+    transport::{
+        Deserialize,
+        Serialize,
+        Transport,
+    },
+    yellow_blocks::Address,
 };
 use casperfpga_derive::{
     address,
@@ -172,7 +175,7 @@ where
     pub fn device_ip(&self) -> anyhow::Result<Ipv4Addr> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        let ip: IpAddress = transport.read(&self.name, IpAddress::addr().into())?;
+        let ip: IpAddress = transport.read_addr(&self.name)?;
         Ok(ip.0)
     }
 }

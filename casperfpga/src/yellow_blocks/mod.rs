@@ -3,3 +3,9 @@ pub mod clockswitch;
 pub mod snapadc;
 pub mod swreg;
 pub mod ten_gbe;
+
+/// Certain Yellow Block struct types will implement this trait to allow for auto offsets in
+/// transport read methods
+pub trait Address {
+    fn addr() -> u8;
+}
