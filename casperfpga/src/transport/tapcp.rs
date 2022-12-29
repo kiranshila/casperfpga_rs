@@ -86,7 +86,10 @@ impl Transport for Tapcp {
             .collect())
     }
 
-    fn program(&mut self, _filename: &std::path::Path) -> anyhow::Result<()> {
+    fn program<P>(&mut self, _filename: &P) -> anyhow::Result<()>
+    where
+        P: AsRef<std::path::Path>,
+    {
         todo!()
     }
 
@@ -94,11 +97,7 @@ impl Transport for Tapcp {
         todo!()
     }
 
-    fn read_bytes<const N: usize>(
-        &mut self,
-        device: &str,
-        offset: usize,
-    ) -> anyhow::Result<[u8; N]> {
+    fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> anyhow::Result<Vec<u8>> {
         // TAPCP works on a block of size 4 bytes, so we need to do some chunking and slicing
         // The goal here is to be efficient, we don't want to query bytes we don't need.
         // The "worst case" is when we want to read bytes between words
@@ -107,14 +106,12 @@ impl Transport for Tapcp {
         // In that case, we need to read both words.
         // First, grab enough multiple of 4 bytes
         let first_word = offset / 4;
-        let last_word = (offset + N) / 4;
+        let last_word = (offset + n) / 4;
         let word_n = last_word - first_word;
         let bytes = tapcp::read_device(device, first_word, word_n, &mut self.0)?;
         // Now we slice out the the relevant chunk
         let start_idx = offset % 4;
-        Ok(bytes[start_idx..start_idx + N]
-            .try_into()
-            .expect("This will always be N long"))
+        Ok(bytes[start_idx..start_idx + n].to_vec())
     }
 }
 
@@ -131,6 +128,7 @@ pub(crate) mod python {
     use pyo3::{
         conversion::ToPyObject,
         prelude::*,
+        types::PyBytes,
     };
     pub(crate) fn add_tapcp(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         /// Transport via TAPCP - connects on construction
@@ -149,7 +147,72 @@ pub(crate) mod python {
                 Ok(self.0.is_running()?)
             }
 
-            fn listdev(&mut self, py: Python<'_>) -> PyResult<PyObject> {
+            #[pyo3(text_signature = "($self,device,n, offset)")]
+            #[args(offset = "0")]
+            fn read_bytes(
+                &mut self,
+                py: Python,
+                device: String,
+                n: usize,
+                offset: usize,
+            ) -> PyResult<PyObject> {
+                Ok(PyBytes::new(py, &self.0.read_n_bytes(&device, offset, n)?).into())
+            }
+
+            #[pyo3(text_signature = "($self,device,offset)")]
+            #[args(offset = "0")]
+            fn read_int(&mut self, device: String, offset: usize) -> PyResult<i32> {
+                let val: i32 = self.0.read(&device, offset)?;
+                Ok(val)
+            }
+
+            #[pyo3(text_signature = "($self,device,offset)")]
+            #[args(offset = "0")]
+            fn read_float(&mut self, device: String, offset: usize) -> PyResult<f32> {
+                let val: f32 = self.0.read(&device, offset)?;
+                Ok(val)
+            }
+
+            #[pyo3(text_signature = "($self,device,offset)")]
+            #[args(offset = "0")]
+            fn read_bool(&mut self, device: String, offset: usize) -> PyResult<bool> {
+                let val: i32 = self.0.read(&device, offset)?;
+                Ok(val == 1)
+            }
+
+            #[pyo3(text_signature = "($self,device,n, offset)")]
+            #[args(offset = "0")]
+            fn write_bytes(
+                &mut self,
+                py: Python,
+                bytes: Py<PyBytes>,
+                device: String,
+                offset: usize,
+            ) -> PyResult<()> {
+                let data = bytes.as_bytes(py);
+                Ok(self.0.write_bytes(&device, offset, data)?)
+            }
+
+            #[pyo3(text_signature = "($self,device,offset)")]
+            #[args(offset = "0")]
+            fn write_int(&mut self, val: i32, device: String, offset: usize) -> PyResult<()> {
+                Ok(self.0.write(&device, offset, &val)?)
+            }
+
+            #[pyo3(text_signature = "($self,device,offset)")]
+            #[args(offset = "0")]
+            fn write_float(&mut self, val: f32, device: String, offset: usize) -> PyResult<()> {
+                Ok(self.0.write(&device, offset, &val)?)
+            }
+
+            #[pyo3(text_signature = "($self,device,offset)")]
+            #[args(offset = "0")]
+            fn write_bool(&mut self, val: bool, device: String, offset: usize) -> PyResult<()> {
+                Ok(self.0.write(&device, offset, &(val as u32))?)
+            }
+
+            #[pyo3(text_signature = "($self)")]
+            fn listdev(&mut self, py: Python) -> PyResult<PyObject> {
                 let devices: Vec<_> = self
                     .0
                     .listdev()?
@@ -159,7 +222,17 @@ pub(crate) mod python {
                 Ok(devices.to_object(py))
             }
 
-            #[pyo3(text_signature = "($self")]
+            #[pyo3(text_signature = "($self, filename)")]
+            fn program(&mut self, filename: String) -> PyResult<()> {
+                Ok(self.0.program(&filename)?)
+            }
+
+            #[pyo3(text_signature = "($self)")]
+            fn deprogram(&mut self) -> PyResult<()> {
+                Ok(self.0.deprogram()?)
+            }
+
+            #[pyo3(text_signature = "($self)")]
             fn temperature(&mut self) -> PyResult<f32> {
                 Ok(self.0.temperature()?)
             }

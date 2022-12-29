@@ -39,19 +39,15 @@ impl Transport for Mock {
         Ok(true)
     }
 
-    fn read_bytes<const N: usize>(
-        &mut self,
-        device: &str,
-        offset: usize,
-    ) -> anyhow::Result<[u8; N]> {
+    fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> anyhow::Result<Vec<u8>> {
         // Get the address in memory
         let dev = self
             .registers
             .get(device)
             .ok_or_else(|| anyhow!("Device not found"))?;
         // Construct the array
-        let mut bytes = [0u8; N];
-        for i in offset..(offset + N) {
+        let mut bytes = vec![0u8; n];
+        for i in offset..(offset + n) {
             // Pull bytes from memory into bytes vector
             let byte = self
                 .memory
@@ -102,7 +98,10 @@ impl Transport for Mock {
         Ok(self.registers.clone())
     }
 
-    fn program(&mut self, _filename: &std::path::Path) -> anyhow::Result<()> {
+    fn program<P>(&mut self, _filename: &P) -> anyhow::Result<()>
+    where
+        P: AsRef<std::path::Path>,
+    {
         todo!()
     }
 

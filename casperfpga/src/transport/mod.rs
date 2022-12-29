@@ -94,12 +94,20 @@ pub trait Transport {
     /// Tests to see if the connected FPGA is programmed and running
     fn is_running(&mut self) -> anyhow::Result<bool>;
 
+    /// Read an arbitrary number of bytes `n` from `device` at `offset`
+    fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> anyhow::Result<Vec<u8>>;
+
     /// Read `n` bytes from `device` from byte offset `offset` into a const-sized array
     fn read_bytes<const N: usize>(
         &mut self,
         device: &str,
         offset: usize,
-    ) -> anyhow::Result<[u8; N]>;
+    ) -> anyhow::Result<[u8; N]> {
+        Ok(self
+            .read_n_bytes(device, offset, N)?
+            .try_into()
+            .expect("We read exactly N bytes"))
+    }
 
     /// Generically read a `Deserializable` type `T` from the connected platform at `device` and
     /// offset `offset`.
@@ -172,7 +180,9 @@ pub trait Transport {
     fn listdev(&mut self) -> anyhow::Result<RegisterMap>;
 
     /// Program a bitstream file from `filename` to the connected platform
-    fn program(&mut self, filename: &Path) -> anyhow::Result<()>;
+    fn program<P>(&mut self, filename: &P) -> anyhow::Result<()>
+    where
+        P: AsRef<Path>;
 
     /// Deprograms the connected platform
     fn deprogram(&mut self) -> anyhow::Result<()>;
