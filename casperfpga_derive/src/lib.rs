@@ -116,6 +116,7 @@ fn kind_to_type(dev: &FpgDevice) -> Option<proc_macro2::TokenStream> {
     match dev.kind.as_str() {
         "xps:sw_reg" => Some(disambiguate_sw_reg(dev)),
         "xps:ten_gbe" => Some(quote!(casperfpga::yellow_blocks::ten_gbe::TenGbE::<T>)),
+        "xps:snap_adc" => Some(quote!(casperfpga::yellow_blocks::snapadc::SnapAdc::<T>)),
         // Ignore the types that don't have mappings to yellow block implementations
         _ => None,
     }
@@ -123,9 +124,7 @@ fn kind_to_type(dev: &FpgDevice) -> Option<proc_macro2::TokenStream> {
 
 fn dev_to_constructor(name: &str, dev: &FpgDevice) -> Option<proc_macro2::TokenStream> {
     if let Some(ty) = kind_to_type(dev) {
-        let ident = syn::parse_str::<Ident>(name).unwrap_or_else(|_| {
-            panic!("FPGA register name `{name}` is not a valid rust identifier")
-        });
+        let ident = syn::parse_str::<Ident>(name).ok()?;
         macro_rules! from_fpg {
             () => {
                 Some(quote! {let #ident = #ty::from_fpg(tweak.clone(), #name)?;})
@@ -143,6 +142,7 @@ fn dev_to_constructor(name: &str, dev: &FpgDevice) -> Option<proc_macro2::TokenS
                 _ => unreachable!(),
             },
             "xps:ten_gbe" => from_fpg!(),
+            "xps:snap_adc" => from_fpg!(adc_resolution, sample_rate, snap_inputs),
             // Ignore the types that don't have mappings to yellow block implementations
             _ => None,
         }
@@ -155,13 +155,11 @@ fn generate_struct_fields(devices: &HashMap<KString, FpgDevice>) -> Vec<proc_mac
     devices
         .iter()
         .filter_map(|(name, dev)| {
-            // Make sure this is actually a register
-            dev.register.as_ref()?;
             // Construct the token stream
-            let ident = syn::parse_str::<Ident>(name.as_str()).unwrap_or_else(|_| {
-                panic!("FPGA register name `{name}` is not a valid rust identifier")
-            });
             kind_to_type(dev).map(|ty| {
+                let ident = syn::parse_str::<Ident>(name.as_str()).unwrap_or_else(|_| {
+                    panic!("FPGA register name `{name}` is not a valid rust identifier")
+                });
                 quote! {
                     #ident: #ty
                 }
@@ -174,13 +172,11 @@ fn generate_field_names(devices: &HashMap<KString, FpgDevice>) -> Vec<Ident> {
     devices
         .iter()
         .filter_map(|(name, dev)| {
-            // Make sure this is actually a register
-            dev.register.as_ref()?;
-            // Construct the token stream
-            let ident = syn::parse_str::<Ident>(name.as_str()).unwrap_or_else(|_| {
-                panic!("FPGA register name `{name}` is not a valid rust identifier")
-            });
-            kind_to_type(dev).map(|_| ident)
+            kind_to_type(dev).map(|_| {
+                syn::parse_str::<Ident>(name.as_str()).unwrap_or_else(|_| {
+                    panic!("FPGA register name `{name}` is not a valid rust identifier")
+                })
+            })
         })
         .collect()
 }
@@ -188,12 +184,7 @@ fn generate_field_names(devices: &HashMap<KString, FpgDevice>) -> Vec<Ident> {
 fn generate_constructors(devices: &HashMap<KString, FpgDevice>) -> Vec<proc_macro2::TokenStream> {
     devices
         .iter()
-        .filter_map(|(name, dev)| {
-            // Make sure this is actually a register
-            dev.register.as_ref()?;
-            // Construct the token stream
-            dev_to_constructor(name, dev)
-        })
+        .filter_map(|(name, dev)| dev_to_constructor(name, dev))
         .collect()
 }
 

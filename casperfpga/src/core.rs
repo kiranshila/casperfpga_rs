@@ -1,14 +1,12 @@
 //! The core types and functions for interacting with CasperFpga objects
-use crate::transport::{
-    tapcp::Tapcp,
-    Transport,
-};
-use anyhow::bail;
+use crate::transport::Transport;
 use kstring::KString;
 use std::{
     collections::HashMap,
-    net::SocketAddr,
-    path::Path,
+    time::{
+        Duration,
+        SystemTime,
+    },
 };
 
 /// The representation of an interal register
@@ -23,31 +21,23 @@ pub struct Register {
 /// The mapping from register names and their data (address and size)
 pub type RegisterMap = HashMap<KString, Register>;
 
-/// The default type of CasperFPGA. This encapsulates the transport method and holds the record of
-/// the "current" devices, but provides no high level typesafe interfaces into yellow blocks.
-pub struct CasperFpga<T> {
-    pub transport: T,
-    pub registers: RegisterMap,
-}
-
-// Constructors
-
-impl CasperFpga<Tapcp> {
-    pub fn new<T>(host: SocketAddr) -> anyhow::Result<Self>
-    where
-        T: AsRef<Path>,
-    {
-        let mut transport = Tapcp::connect(host)?;
-        if transport.is_running()? {
-            let registers = transport.listdev()?;
-            Ok(CasperFpga {
-                transport,
-                registers,
-            })
-        } else {
-            bail!("FPGA is not running")
-        }
+/// Read the `sys_clkcounter` register a few times to estimate the clock rate in MHz
+pub fn estimate_fpga_clock<T>(transport: &mut T) -> anyhow::Result<f64>
+where
+    T: Transport,
+{
+    let delay_s = 2f64;
+    let earlier = SystemTime::now();
+    let first_count = transport.read::<u32, 4>("sys_clkcounter", 0)? as u64;
+    let later = SystemTime::now();
+    std::thread::sleep(Duration::from_secs_f64(delay_s));
+    let mut second_count = transport.read::<u32, 4>("sys_clkcounter", 0)? as u64;
+    if first_count > second_count {
+        second_count += 2u64.pow(32);
     }
+    let transport_elapsed = later.duration_since(earlier)?;
+    let transport_delay = transport_elapsed.as_secs_f64();
+    Ok((second_count - first_count) as f64 / ((delay_s - transport_delay) * 1000000f64))
 }
 
 #[cfg(feature = "python")]
