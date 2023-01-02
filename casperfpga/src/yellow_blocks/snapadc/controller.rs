@@ -3,9 +3,26 @@
 //!
 //! This device controls and manages multiple HMCAD1511 ADCs
 
-use super::hmcad1511::{
-    Reset,
-    SleepPd,
+use super::{
+    hmcad1511::{
+        ChanNumClkDiv,
+        ChannelNum,
+        ClockDivide,
+        CustomPattern1,
+        CustomPattern2,
+        DeskewSyncMode,
+        DeskewSyncPattern,
+        InputSelect,
+        InputSelect12,
+        InputSelect34,
+        LvdsOutputControl,
+        LvdsShift,
+        Pattern,
+        PatternCtl,
+        Reset,
+        SleepPd,
+    },
+    AdcMode,
 };
 use crate::{
     transport::{
@@ -84,10 +101,8 @@ where
         self.cs = *cs;
     }
 
-    /// Cursed bit-banging to send a bit to the current chip select
-    fn send_3wire_bit(&self, bit: bool) -> anyhow::Result<()> {
-        let tarc = self.transport.upgrade().unwrap();
-        let mut transport = (*tarc).lock().unwrap();
+    /// Cursed bit-banging to send a bit to the current chip select taking a mutable transport ref
+    fn send_3wire_bit(&self, transport: &mut T, bit: bool) -> anyhow::Result<()> {
         // Clock low, data and chip select set accordingly
         transport.write_addr(
             Self::NAME,
@@ -111,8 +126,24 @@ where
         Ok(())
     }
 
+    fn send_reg_raw(&self, transport: &mut T, addr: u8, val: u16) -> anyhow::Result<()> {
+        // Idle
+        transport.write_addr(Self::NAME, &Adc3Wire::idle())?;
+        // Write the address
+        for i in (0..=7).rev() {
+            self.send_3wire_bit(transport, ((addr >> i) & 1) == 1)?;
+        }
+        // And the data
+        for i in (0..=15).rev() {
+            self.send_3wire_bit(transport, ((val >> i) & 1) == 1)?;
+        }
+        // Idle
+        transport.write_addr(Self::NAME, &Adc3Wire::idle())?;
+        Ok(())
+    }
+
     /// Cursed bit-banging to send an ADC register over the 3 wire to the current chip select
-    fn send_reg<R>(&self, reg: R) -> anyhow::Result<()>
+    fn send_reg<R>(&self, transport: &mut T, reg: R) -> anyhow::Result<()>
     where
         R: Address + PackedStruct,
     {
@@ -121,22 +152,7 @@ where
         let mut packed = [0u8; 2];
         reg.pack_to_slice(&mut packed)?;
         let value = u16::from_be_bytes(packed);
-        // Grab the transport context
-        let tarc = self.transport.upgrade().unwrap();
-        let mut transport = (*tarc).lock().unwrap();
-        // Idle
-        transport.write_addr(Self::NAME, &Adc3Wire::idle())?;
-        // Write the address
-        for i in (0..=7).rev() {
-            self.send_3wire_bit(((addr >> i) & 1) == 1)?;
-        }
-        // And the data
-        for i in (0..=15).rev() {
-            self.send_3wire_bit(((value >> i) & 1) == 1)?;
-        }
-        // Then back to idle
-        transport.write_addr(Self::NAME, &Adc3Wire::idle())?;
-        Ok(())
+        self.send_reg_raw(transport, addr, value)
     }
 
     /// Checks if the gateware supports demultiplexing modes
@@ -201,28 +217,260 @@ where
 
     /// Resets all the chips selected by the current chip select
     pub fn reset(&self) -> anyhow::Result<()> {
-        self.send_reg(Reset { reset: true })
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        self.send_reg(&mut transport, Reset { reset: true })
+    }
+
+    /// Power down the ADCs by setting the pd bit
+    pub fn power_down(&self) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        // Powerdown
+        self.send_reg(
+            &mut transport,
+            SleepPd {
+                pd: true,
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Power up the ADCs by setting the pd bit
+    pub fn power_up(&self) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        // Powerdown
+        self.send_reg(
+            &mut transport,
+            SleepPd {
+                pd: false,
+                ..Default::default()
+            },
+        )
     }
 
     /// Power cycles all the ADCs selected by the current chip select
     pub fn power_cycle(&mut self) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
         // Powerdown
-        self.send_reg(SleepPd {
-            pd: true,
-            ..Default::default()
-        })?;
+        self.send_reg(
+            &mut transport,
+            SleepPd {
+                pd: true,
+                ..Default::default()
+            },
+        )?;
         // Store old chip select
         let old_cs = self.cs;
         // Power up one chip at a time
         for i in 0..=7 {
             self.cs = ChipSelect::by_number(i);
             // Powerup
-            self.send_reg(SleepPd::default())?;
+            self.send_reg(&mut transport, SleepPd::default())?;
         }
         // Restore old cs
         self.cs = old_cs;
         Ok(())
     }
+
+    /// Selects a test pattern or sampled data for all the adc currently selected
+    pub fn enable_pattern(&self, pat: TestPattern) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        self.send_reg(&mut transport, PatternCtl::default())?;
+        self.send_reg(&mut transport, DeskewSyncPattern::default())?;
+        match pat {
+            TestPattern::Ramp => self.send_reg(
+                &mut transport,
+                PatternCtl {
+                    pattern: Pattern::Ramp,
+                },
+            ),
+            TestPattern::Deskew => self.send_reg(
+                &mut transport,
+                DeskewSyncPattern {
+                    pat_deskew_sync: DeskewSyncMode::Deskew,
+                },
+            ),
+            TestPattern::Sync => self.send_reg(
+                &mut transport,
+                DeskewSyncPattern {
+                    pat_deskew_sync: DeskewSyncMode::Sync,
+                },
+            ),
+            TestPattern::Custom1 | TestPattern::Custom2 => self.send_reg(
+                &mut transport,
+                PatternCtl {
+                    pattern: Pattern::SingleCustom,
+                },
+            ),
+            TestPattern::Dual => self.send_reg(
+                &mut transport,
+                PatternCtl {
+                    pattern: Pattern::DualCustom,
+                },
+            ),
+            _ => Ok(()),
+        }
+    }
+
+    /// Set the "Custom 1 " pattern
+    pub fn custom_1(&self, bits: [bool; 8]) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        self.send_reg(&mut transport, CustomPattern1 { bits_custom1: bits })
+    }
+
+    /// Set the "Custom 2 " pattern
+    pub fn custom_2(&self, bits: [bool; 8]) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        self.send_reg(&mut transport, CustomPattern2 { bits_custom2: bits })
+    }
+
+    /// Perform a bitslip operation on specified chips
+    pub fn bitslip(&self, bitslips: Bitslip) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        let slip = AdcControl {
+            bitslip: bitslips,
+            ..Default::default()
+        };
+        transport.write_addr(Self::NAME, &AdcControl::default())?;
+        transport.write_addr(Self::NAME, &slip)?;
+        transport.write_addr(Self::NAME, &AdcControl::default())?;
+        Ok(())
+    }
+
+    /// Request a snapshot - reads from the corresponding BRAM happen elsewhere
+    pub fn snap_req(&self) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        // Request the snapshot
+        let snap_req = AdcControl {
+            snap_request: true,
+            ..Default::default()
+        };
+        transport.write_addr(Self::NAME, &AdcControl::default())?;
+        transport.write_addr(Self::NAME, &snap_req)?;
+        transport.write_addr(Self::NAME, &AdcControl::default())?;
+        Ok(())
+    }
+
+    /// Set the operating mode along with the clock frequency in MHz
+    /// We will *always* set the clock divide to 1, as is done in the python. Wouldn't be that bad
+    /// to change, but would need manual intervention at init time.
+    pub fn set_operating_mode(&self, mode: AdcMode, freq: f64) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+
+        // Determine if we need to set the low frequency bit
+        let low_clk = LvdsOutputControl {
+            low_clk_freq: ((mode == AdcMode::Single) && (freq < 240.))
+                || ((mode == AdcMode::Dual) && (freq < 120.))
+                || ((mode == AdcMode::Quad) && (freq < 60.)),
+            lvds_shift: LvdsShift::Disabled,
+        };
+
+        // Match mode with the corresponding register
+        let chan_cfg = ChanNumClkDiv {
+            channel_num: match mode {
+                AdcMode::Single => ChannelNum::Single,
+                AdcMode::Dual => ChannelNum::Dual,
+                AdcMode::Quad => ChannelNum::Quad,
+            },
+            clk_divide: ClockDivide::_1,
+        };
+
+        // Send all the bits
+        self.send_reg(&mut transport, chan_cfg)?;
+        self.send_reg(&mut transport, low_clk)?;
+
+        Ok(())
+    }
+
+    /// Startup the ADCs into a clean slate
+    pub fn init(&mut self, mode: AdcMode, freq: f64) -> anyhow::Result<()> {
+        self.reset()?;
+        self.power_down()?;
+        self.set_operating_mode(mode, freq)?;
+        self.power_up()?;
+        Ok(())
+    }
+
+    /// Set the crossbars in the chip selected adc
+    pub fn input_select(&self, inputs: ChannelInput) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        // Make the selections
+        let mut selections = [InputSelect::default(); 4];
+        match inputs {
+            ChannelInput::Single(a) => {
+                selections[0] = a;
+                selections[1] = a;
+                selections[2] = a;
+                selections[3] = a;
+            }
+            ChannelInput::Dual(a, b) => {
+                selections[0] = a;
+                selections[1] = a;
+                selections[2] = b;
+                selections[3] = b;
+            }
+            ChannelInput::Quad(a, b, c, d) => {
+                selections[0] = a;
+                selections[1] = b;
+                selections[2] = c;
+                selections[3] = d;
+            }
+        }
+        // Write the inputs
+        self.send_reg(
+            &mut transport,
+            InputSelect12 {
+                inp_sel_adc1: selections[0],
+                inp_sel_adc2: selections[1],
+            },
+        )?;
+        self.send_reg(
+            &mut transport,
+            InputSelect34 {
+                inp_sel_adc3: selections[2],
+                inp_sel_adc4: selections[3],
+            },
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+/// Crossbar selections for given input modes
+pub enum ChannelInput {
+    /// All interleaved - one input for all cores
+    Single(InputSelect),
+    //// ADCs 1 and 2 then 3 and 4 interleaved, each pair shares input
+    Dual(InputSelect, InputSelect),
+    /// ADCs 1 through 4 have independent inputs
+    Quad(InputSelect, InputSelect, InputSelect, InputSelect),
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+/// Test patterns to enable
+pub enum TestPattern {
+    #[default]
+    /// Ramp from 0 to 255
+    Ramp,
+    /// Deskew (10101010)
+    Deskew,
+    /// Sync (11110000)
+    Sync,
+    Custom1,
+    Custom2,
+    Dual,
+    /// Sampled data
+    None,
 }
 
 #[derive(PackedStruct, Default, Debug, PartialEq, Copy, Clone)]
@@ -247,6 +495,11 @@ pub struct ChipSelect {
 }
 
 impl ChipSelect {
+    /// Select every ADC this controller supports
+    pub fn select_all() -> Self {
+        Self::unpack_from_slice(&[0b11111111]).unwrap()
+    }
+
     fn by_number(v: u8) -> Self {
         match v {
             0 => Self {

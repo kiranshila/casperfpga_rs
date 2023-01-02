@@ -122,9 +122,21 @@ fn kind_to_type(dev: &FpgDevice) -> Option<proc_macro2::TokenStream> {
     }
 }
 
-fn dev_to_constructor(name: &str, dev: &FpgDevice) -> Option<proc_macro2::TokenStream> {
+fn dev_to_constructor(
+    name: &str,
+    devices: &HashMap<KString, FpgDevice>,
+) -> Option<proc_macro2::TokenStream> {
+    // So, some devices will require entries from *other* devices, like SNAP ADCs needing to know
+    // the clock source, so we'll pass in a single key to the device map and the map itself, so we
+    // can look up other entires
+
+    let dev = devices.get(name).unwrap();
+
     if let Some(ty) = kind_to_type(dev) {
         let ident = syn::parse_str::<Ident>(name).ok()?;
+        // Build the constructor for the given device using its `from_fpg` method.
+        // Follows the informal contract that it begins with the weak transport pointer
+        // and the name of the device.
         macro_rules! from_fpg {
             () => {
                 Some(quote! {let #ident = #ty::from_fpg(tweak.clone(), #name)?;})
@@ -142,7 +154,36 @@ fn dev_to_constructor(name: &str, dev: &FpgDevice) -> Option<proc_macro2::TokenS
                 _ => unreachable!(),
             },
             "xps:ten_gbe" => from_fpg!(),
-            "xps:snap_adc" => from_fpg!(adc_resolution, sample_rate, snap_inputs),
+            "xps:snap_adc" => {
+                let snap = devices
+                    .get("SNAP")
+                    .expect("SNAP ADC entries must accompany a SNAP entry");
+                // Do we need the FPGA clock rate too?
+                let src = snap
+                    .metadata
+                    .get("clk_src")
+                    .expect("SNAP must have clk_src entry");
+
+                // get the rest of the entires manually  - maybe clean this up by updating the macro
+                let adc_resolution = dev
+                    .metadata
+                    .get("adc_resolution")
+                    .expect("Malformed FPG metadata");
+
+                let sample_rate = dev
+                    .metadata
+                    .get("sample_rate")
+                    .expect("Malformed FPG metadata");
+
+                let snap_inputs = dev
+                    .metadata
+                    .get("snap_inputs")
+                    .expect("Malformed FPG metadata");
+
+                Some(quote! {
+                    let #ident = #ty::from_fpg(tweak.clone(), #name, #adc_resolution, #sample_rate, #snap_inputs, #src)?;
+                })
+            }
             // Ignore the types that don't have mappings to yellow block implementations
             _ => None,
         }
@@ -184,7 +225,7 @@ fn generate_field_names(devices: &HashMap<KString, FpgDevice>) -> Vec<Ident> {
 fn generate_constructors(devices: &HashMap<KString, FpgDevice>) -> Vec<proc_macro2::TokenStream> {
     devices
         .iter()
-        .filter_map(|(name, dev)| dev_to_constructor(name, dev))
+        .filter_map(|(name, _)| dev_to_constructor(name, devices))
         .collect()
 }
 

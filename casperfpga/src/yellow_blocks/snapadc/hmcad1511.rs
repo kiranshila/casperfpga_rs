@@ -1,4 +1,6 @@
 //! Register map for the HMCAD1511 ADC from Analog Devices
+//! As far as KS can tell, this is *only* used for the SNAP platform, so many features may go
+//! unimplemented.
 
 use crate::yellow_blocks::Address;
 use casperfpga_derive::address;
@@ -347,7 +349,7 @@ pub struct FineGain78 {
 #[derive(Debug, PackedStruct, Copy, Clone)]
 #[packed_struct(bit_numbering = "lsb0", size_bytes = "2")]
 #[address(0x3A)]
-/// Input seelct for adc 1 and 2
+/// Input select for adc 1 and 2
 pub struct InputSelect12 {
     #[packed_field(bits = "0..=4", ty = "enum")]
     pub(crate) inp_sel_adc1: InputSelect,
@@ -367,7 +369,7 @@ impl Default for InputSelect12 {
 #[derive(Debug, PackedStruct, Copy, Clone)]
 #[packed_struct(bit_numbering = "lsb0", size_bytes = "2")]
 #[address(0x3B)]
-/// Input seelct for adc 1 and 2
+/// Input select for adc 3 and 4
 pub struct InputSelect34 {
     #[packed_field(bits = "0..=4", ty = "enum")]
     pub(crate) inp_sel_adc3: InputSelect,
@@ -416,7 +418,7 @@ pub enum PhaseDdr {
     _0 = 3,
 }
 
-#[derive(Debug, PackedStruct, Copy, Clone)]
+#[derive(Debug, PackedStruct, Copy, Clone, Default)]
 #[packed_struct(bit_numbering = "lsb0", size_bytes = "2")]
 #[address(0x45)]
 pub struct DeskewSyncPattern {
