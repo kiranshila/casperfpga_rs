@@ -4,24 +4,7 @@
 //! This device controls and manages multiple HMCAD1511 ADCs
 
 use super::{
-    hmcad1511::{
-        ChanNumClkDiv,
-        ChannelNum,
-        ClockDivide,
-        CustomPattern1,
-        CustomPattern2,
-        DeskewSyncMode,
-        DeskewSyncPattern,
-        InputSelect,
-        InputSelect12,
-        InputSelect34,
-        LvdsOutputControl,
-        LvdsShift,
-        Pattern,
-        PatternCtl,
-        Reset,
-        SleepPd,
-    },
+    hmcad1511::*,
     AdcMode,
 };
 use crate::{
@@ -442,6 +425,58 @@ where
             },
         )?;
         Ok(())
+    }
+
+    /// Disable LVDS terminations
+    pub fn disable_termination(&self) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        self.send_reg(
+            &mut transport,
+            LvdsTerminations {
+                en_lvds_term: false,
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Set the three LVDS terminations
+    pub fn set_terminations(
+        &self,
+        lclk: LvdsTermination,
+        frame: LvdsTermination,
+        data: LvdsTermination,
+    ) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        self.send_reg(
+            &mut transport,
+            LvdsTerminations {
+                en_lvds_term: true,
+                term_lclk: lclk,
+                term_frame: frame,
+                term_dat: data,
+            },
+        )
+    }
+
+    /// Set the LVDS drive strengths
+    pub fn set_drive_strength(
+        &self,
+        lclk: LvdsDriveStrength,
+        frame: LvdsDriveStrength,
+        data: LvdsDriveStrength,
+    ) -> anyhow::Result<()> {
+        let tarc = self.transport.upgrade().unwrap();
+        let mut transport = (*tarc).lock().unwrap();
+        self.send_reg(
+            &mut transport,
+            LvdsDrives {
+                ilvds_lclk: lclk,
+                ilvds_frame: frame,
+                ilvds_dat: data,
+            },
+        )
     }
 }
 

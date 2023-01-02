@@ -15,6 +15,10 @@ use self::{
         ChannelInput,
         ChipSelect,
     },
+    hmcad1511::{
+        LvdsDriveStrength,
+        LvdsTermination,
+    },
     lmx::LmxSynth,
 };
 use crate::transport::Transport;
@@ -129,6 +133,27 @@ where
         }
         // Initialize the ADCs (this does a reset, power cycles, and sets the modes)
         self.controller.init(self.mode, self.sample_rate)?;
+        // Set the termination and drive strength on two out of the three ADCs as the clock is only
+        // sourced from adc0
+        self.controller.chip_select(&ChipSelect {
+            b: true,
+            c: true,
+            ..Default::default()
+        });
+        // LCLK and Frame to 94 Ohms
+        self.controller.set_terminations(
+            LvdsTermination::_94,
+            LvdsTermination::_94,
+            LvdsTermination::default(),
+        )?;
+        // LCLK and Frame to 0.5 mA
+        self.controller.set_drive_strength(
+            LvdsDriveStrength::_0_5,
+            LvdsDriveStrength::_0_5,
+            LvdsDriveStrength::default(),
+        )?;
+        // And back to select all
+        self.controller.chip_select(&ChipSelect::select_all());
 
         // Calibrate here maybe?
 
