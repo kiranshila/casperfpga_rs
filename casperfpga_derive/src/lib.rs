@@ -1,3 +1,6 @@
+#![deny(clippy::all)]
+#![warn(clippy::pedantic)]
+
 use casper_utils::bitstream::fpg::{
     read_fpg_file,
     FpgDevice,
@@ -22,7 +25,7 @@ use syn::{
 };
 
 #[proc_macro_derive(CasperSerde)]
-/// Derived on a packed_struct to shim in our serde methods on packed structs
+/// Derived on a [`PackedStruct`] to shim in our serde methods on packed structs
 pub fn derive_casper_serde(tokens: TokenStream) -> TokenStream {
     let input = parse_macro_input!(tokens as DeriveInput);
     let block_name = input.ident;
@@ -49,6 +52,8 @@ pub fn derive_casper_serde(tokens: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 /// Implement the Address trait on this struct, allowing for automatic addressing when reading and
 /// writing
+/// # Panics
+/// Panics on bad address literals
 pub fn address(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr = match syn::parse::<syn::Lit>(attr).expect("Error parsing attribute") {
         syn::Lit::Int(v) => v,
