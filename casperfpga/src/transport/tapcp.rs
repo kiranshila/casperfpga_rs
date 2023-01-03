@@ -17,11 +17,13 @@ use std::{
 const DEFAULT_TIMEOUT: f32 = 0.1;
 
 #[derive(Debug)]
-/// A TAPCP Connection (newtype for a UdpSocket)
+/// A TAPCP Connection (newtype for a [`UdpSocket`])
 pub struct Tapcp(UdpSocket);
 
 impl Tapcp {
     /// Create and connect to a TAPCP transport
+    /// # Errors
+    /// Will return an error if the UDP socket fails to connect
     pub fn connect(host: SocketAddr) -> anyhow::Result<Self> {
         let socket = UdpSocket::bind("0.0.0.0:0")?;
         // Set a default timeout
@@ -117,12 +119,15 @@ impl Transport for Tapcp {
 
 impl Tapcp {
     /// Gets the temperature from the connected device in Celsius
+    /// # Errors
+    /// Returns errors on transport failures
     pub fn temperature(&mut self) -> anyhow::Result<f32> {
         tapcp::temp(&mut self.0)
     }
 }
 
 #[cfg(feature = "python")]
+#[allow(clippy::pedantic)]
 pub(crate) mod python {
     use crate::transport::Transport;
     use pyo3::{
@@ -138,7 +143,7 @@ pub(crate) mod python {
         #[pymethods]
         impl Tapcp {
             #[new]
-            fn new(ip: String) -> PyResult<Self> {
+            fn new(ip: &str) -> PyResult<Self> {
                 let inner = super::Tapcp::connect(ip.parse()?)?;
                 Ok(Tapcp(inner))
             }
@@ -152,31 +157,31 @@ pub(crate) mod python {
             fn read_bytes(
                 &mut self,
                 py: Python,
-                device: String,
+                device: &str,
                 n: usize,
                 offset: usize,
             ) -> PyResult<PyObject> {
-                Ok(PyBytes::new(py, &self.0.read_n_bytes(&device, offset, n)?).into())
+                Ok(PyBytes::new(py, &self.0.read_n_bytes(device, offset, n)?).into())
             }
 
             #[pyo3(text_signature = "($self,device,offset)")]
             #[args(offset = "0")]
-            fn read_int(&mut self, device: String, offset: usize) -> PyResult<i32> {
-                let val: i32 = self.0.read(&device, offset)?;
+            fn read_int(&mut self, device: &str, offset: usize) -> PyResult<i32> {
+                let val: i32 = self.0.read(device, offset)?;
                 Ok(val)
             }
 
             #[pyo3(text_signature = "($self,device,offset)")]
             #[args(offset = "0")]
-            fn read_float(&mut self, device: String, offset: usize) -> PyResult<f32> {
-                let val: f32 = self.0.read(&device, offset)?;
+            fn read_float(&mut self, device: &str, offset: usize) -> PyResult<f32> {
+                let val: f32 = self.0.read(device, offset)?;
                 Ok(val)
             }
 
             #[pyo3(text_signature = "($self,device,offset)")]
             #[args(offset = "0")]
-            fn read_bool(&mut self, device: String, offset: usize) -> PyResult<bool> {
-                let val: i32 = self.0.read(&device, offset)?;
+            fn read_bool(&mut self, device: &str, offset: usize) -> PyResult<bool> {
+                let val: i32 = self.0.read(device, offset)?;
                 Ok(val == 1)
             }
 
@@ -195,20 +200,20 @@ pub(crate) mod python {
 
             #[pyo3(text_signature = "($self,device,offset)")]
             #[args(offset = "0")]
-            fn write_int(&mut self, val: i32, device: String, offset: usize) -> PyResult<()> {
-                Ok(self.0.write(&device, offset, &val)?)
+            fn write_int(&mut self, val: i32, device: &str, offset: usize) -> PyResult<()> {
+                Ok(self.0.write(device, offset, &val)?)
             }
 
             #[pyo3(text_signature = "($self,device,offset)")]
             #[args(offset = "0")]
-            fn write_float(&mut self, val: f32, device: String, offset: usize) -> PyResult<()> {
-                Ok(self.0.write(&device, offset, &val)?)
+            fn write_float(&mut self, val: f32, device: &str, offset: usize) -> PyResult<()> {
+                Ok(self.0.write(device, offset, &val)?)
             }
 
             #[pyo3(text_signature = "($self,device,offset)")]
             #[args(offset = "0")]
-            fn write_bool(&mut self, val: bool, device: String, offset: usize) -> PyResult<()> {
-                Ok(self.0.write(&device, offset, &(val as u32))?)
+            fn write_bool(&mut self, val: bool, device: &str, offset: usize) -> PyResult<()> {
+                Ok(self.0.write(device, offset, &(u32::from(val)))?)
             }
 
             #[pyo3(text_signature = "($self)")]

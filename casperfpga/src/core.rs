@@ -1,4 +1,4 @@
-//! The core types and functions for interacting with CasperFpga objects
+//! The core types and functions for interacting with casperfpga objects
 use crate::transport::Transport;
 use kstring::KString;
 use std::{
@@ -21,23 +21,26 @@ pub struct Register {
 /// The mapping from register names and their data (address and size)
 pub type RegisterMap = HashMap<KString, Register>;
 
-/// Read the `sys_clkcounter` register a few times to estimate the clock rate in MHz
+/// Read the `sys_clkcounter` register a few times to estimate the clock rate in megahertz
+/// # Errors
+/// Returns an error on bad transport
+#[allow(clippy::cast_precision_loss)]
 pub fn estimate_fpga_clock<T>(transport: &mut T) -> anyhow::Result<f64>
 where
     T: Transport,
 {
     let delay_s = 2f64;
     let earlier = SystemTime::now();
-    let first_count = transport.read::<u32, 4>("sys_clkcounter", 0)? as u64;
+    let first_count = u64::from(transport.read::<u32, 4>("sys_clkcounter", 0)?);
     let later = SystemTime::now();
     std::thread::sleep(Duration::from_secs_f64(delay_s));
-    let mut second_count = transport.read::<u32, 4>("sys_clkcounter", 0)? as u64;
+    let mut second_count = u64::from(transport.read::<u32, 4>("sys_clkcounter", 0)?);
     if first_count > second_count {
         second_count += 2u64.pow(32);
     }
     let transport_elapsed = later.duration_since(earlier)?;
     let transport_delay = transport_elapsed.as_secs_f64();
-    Ok((second_count - first_count) as f64 / ((delay_s - transport_delay) * 1000000f64))
+    Ok((second_count - first_count) as f64 / ((delay_s - transport_delay) * 1_000_000_f64))
 }
 
 #[cfg(feature = "python")]

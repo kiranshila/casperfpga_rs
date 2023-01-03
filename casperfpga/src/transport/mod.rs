@@ -19,6 +19,9 @@ pub trait Serialize {
 /// software registers
 pub trait Deserialize: Sized {
     type Chunk;
+    /// Deserializes from a fixed-size byte slice
+    /// # Errors
+    /// Errors on invalid bytes for the deserialization
     fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self>;
 }
 
@@ -92,12 +95,18 @@ impl<const N: usize> Deserialize for [u8; N] {
 /// The methods of this trait *assume* that the device is already connected.
 pub trait Transport {
     /// Tests to see if the connected FPGA is programmed and running
+    /// # Errors
+    /// Returns errors on bad transport
     fn is_running(&mut self) -> anyhow::Result<bool>;
 
     /// Read an arbitrary number of bytes `n` from `device` at `offset`
+    /// # Errors
+    /// Returns errors on bad transport
     fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> anyhow::Result<Vec<u8>>;
 
     /// Read `n` bytes from `device` from byte offset `offset` into a const-sized array
+    /// # Errors
+    /// Returns errors on bad transport
     fn read_bytes<const N: usize>(
         &mut self,
         device: &str,
@@ -120,6 +129,8 @@ pub trait Transport {
     /// # use crate::casperfpga::transport::Transport;
     /// let my_num: u32 = transport.read("sys_scratchpad",0).unwrap();
     /// ```
+    /// # Errors
+    /// Returns errors on bad transport or deserialization
     fn read<T, const N: usize>(&mut self, device: &str, offset: usize) -> anyhow::Result<T>
     where
         T: Deserialize<Chunk = [u8; N]>,
@@ -130,6 +141,8 @@ pub trait Transport {
 
     /// Generically read a `Deserializable` + `Address` type `T` from the connected platform at
     /// `device` and offset specified in the type's address.
+    /// # Errors
+    /// Returns errors on bad transport or deserialization
     fn read_addr<T, const N: usize>(&mut self, device: &str) -> anyhow::Result<T>
     where
         T: Deserialize<Chunk = [u8; N]> + Address,
@@ -139,6 +152,8 @@ pub trait Transport {
     }
 
     /// Write `data` to `device` from byte offset `offset`
+    /// # Errors
+    /// Returns errors on bad transport
     fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()>;
 
     /// Generically write a `Serializable` type `T` to the connected platform at `device` and offset
@@ -153,6 +168,8 @@ pub trait Transport {
     /// let my_num = 3.14f32;
     /// transport.write("sys_scratchpad",0, &my_num).unwrap();
     /// ```
+    /// # Errors
+    /// Returns errors on bad transport
     fn write<T, const N: usize>(
         &mut self,
         device: &str,
@@ -168,6 +185,8 @@ pub trait Transport {
 
     /// Generically write a `Deserializable` + `Address` type `T` from the connected platform at
     /// `device` and offset specified in the type's address.
+    /// # Errors
+    /// Returns errors on bad transport
     fn write_addr<T, const N: usize>(&mut self, device: &str, data: &T) -> anyhow::Result<()>
     where
         T: Serialize<Chunk = [u8; N]> + Address,
@@ -177,13 +196,19 @@ pub trait Transport {
     }
 
     /// Retrieve a list of available devices on the (potentially programmed) connected platform
+    /// # Errors
+    /// Returns errors on bad transport
     fn listdev(&mut self) -> anyhow::Result<RegisterMap>;
 
     /// Program a bitstream file from `filename` to the connected platform
+    /// # Errors
+    /// Returns errors on bad transport
     fn program<P>(&mut self, filename: &P) -> anyhow::Result<()>
     where
         P: AsRef<Path>;
 
     /// Deprograms the connected platform
+    /// # Errors
+    /// Returns errors on bad transport
     fn deprogram(&mut self) -> anyhow::Result<()>;
 }

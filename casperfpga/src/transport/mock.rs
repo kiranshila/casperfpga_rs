@@ -20,17 +20,18 @@ pub struct Mock {
 
 impl Mock {
     /// Construct a new mock platform by providing a device map `devices`
+    #[must_use]
     pub fn new(registers: RegisterMap) -> Self {
         // We'll represent each address lazily instead of havig a dense array
         // but it really shouldn't matter
-        let mut memory: HashMap<usize, u8> = Default::default();
+        let mut memory: HashMap<usize, u8> = HashMap::default();
 
-        for (_, Register { addr, length }) in registers.iter() {
+        for Register { addr, length } in registers.values() {
             for i in 0..*length {
                 memory.insert(addr + i, 0u8);
             }
         }
-        Self { registers, memory }
+        Self { memory, registers }
     }
 }
 
@@ -119,6 +120,7 @@ mod tests {
         ($num:ty, $v:literal) => {
             paste! {
                 #[test]
+                #[allow(clippy::float_cmp)]
                 fn [<test_rw_$num>]() {
                     let mut transport = Mock::new(HashMap::from([(
                         "sys_scratchpad".into(),

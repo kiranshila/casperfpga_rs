@@ -1,8 +1,9 @@
 //! Implementations of the "ADC16" controller, as specified
-//! by Dave MacMahon's [Ruby Implementation](https://github.com/david-macmahon/casper_adc16/blob/master/ruby/lib/adc16.rb).
+//! by Dave's [Ruby Implementation](https://github.com/david-macmahon/casper_adc16/blob/master/ruby/lib/adc16.rb).
 //!
 //! This device controls and manages multiple HMCAD1511 ADCs
 
+#[allow(clippy::wildcard_imports)]
 use super::{
     hmcad1511::*,
     AdcMode,
@@ -28,27 +29,31 @@ use std::sync::{
 
 /// Controller for the ADC chips themselves
 #[derive(Debug)]
-pub struct Adc16Controller<T> {
+pub struct Adc16<T> {
     /// Upwards pointer to the parent class' transport
     transport: Weak<Mutex<T>>,
     /// Holds the current chip select state,
     cs: ChipSelect,
 }
 
-impl<T> Adc16Controller<T>
+impl<T> Adc16<T>
 where
     T: Transport,
 {
     const NAME: &'static str = "adc16_controller";
 
+    #[must_use]
     pub fn new(transport: Weak<Mutex<T>>) -> Self {
         Self {
             transport,
-            cs: Default::default(),
+            cs: ChipSelect::default(),
         }
     }
 
     /// Gets the number of ADC chips this controller supports
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn supported_chips(&self) -> anyhow::Result<u8> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -57,6 +62,9 @@ where
     }
 
     /// Gets the controller revision
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn revision(&self) -> anyhow::Result<u8> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -65,6 +73,9 @@ where
     }
 
     /// Checks to see if the ADCs are locked
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn locked(&self) -> anyhow::Result<bool> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -85,6 +96,8 @@ where
     }
 
     /// Cursed bit-banging to send a bit to the current chip select taking a mutable transport ref
+    /// # Errors
+    /// Returns an error on bad transport
     fn send_3wire_bit(&self, transport: &mut T, bit: bool) -> anyhow::Result<()> {
         // Clock low, data and chip select set accordingly
         transport.write_addr(
@@ -126,7 +139,7 @@ where
     }
 
     /// Cursed bit-banging to send an ADC register over the 3 wire to the current chip select
-    fn send_reg<R>(&self, transport: &mut T, reg: R) -> anyhow::Result<()>
+    fn send_reg<R>(&self, transport: &mut T, reg: &R) -> anyhow::Result<()>
     where
         R: Address + PackedStruct,
     {
@@ -135,12 +148,19 @@ where
         let mut packed = [0u8; 2];
         reg.pack_to_slice(&mut packed)?;
         let value = u16::from_be_bytes(packed);
-        self.send_reg_raw(transport, addr, value)
+        self.send_reg_raw(
+            transport,
+            addr.try_into().expect("Address didn't fit in a u8"),
+            value,
+        )
     }
 
     /// Checks if the gateware supports demultiplexing modes
     /// Demultiplexing modes are used when running the ADC16 in dual and quad
     /// channel configurations
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn supports_demux(&self) -> anyhow::Result<bool> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -159,6 +179,9 @@ where
     }
 
     /// Gets the current demux mode if the gateware supports it, otherwise returns None
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn get_demux(&self) -> anyhow::Result<Option<DemuxMode>> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -172,7 +195,8 @@ where
 
     /// Sets the current demux mode
     /// Returns an error if the gateware doesn't support demux modes.
-    ///
+    /// # Errors
+    /// Returns an error on bad transport
     /// ### Words of wisdom from Dave
     /// Note that setting the demux mode here only affects the demultiplexing of
     /// the data from the ADC before presenting it to the FPGA fabric.  The
@@ -183,6 +207,7 @@ where
     /// at initialization time is consistent with the demux mode set using this
     /// method.  Mismatches will result in improper interpretation of the data. method.
     /// Mismatches will result in improper interpretation of the data.
+    #[allow(clippy::missing_panics_doc)]
     pub fn set_demux(&self, mode: DemuxMode) -> anyhow::Result<()> {
         if self.supports_demux()? {
             let tarc = self.transport.upgrade().unwrap();
@@ -199,20 +224,26 @@ where
     }
 
     /// Resets all the chips selected by the current chip select
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn reset(&self) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        self.send_reg(&mut transport, Reset { reset: true })
+        self.send_reg(&mut transport, &Reset { reset: true })
     }
 
     /// Power down the ADCs by setting the pd bit
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn power_down(&self) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Powerdown
         self.send_reg(
             &mut transport,
-            SleepPd {
+            &SleepPd {
                 pd: true,
                 ..Default::default()
             },
@@ -220,13 +251,16 @@ where
     }
 
     /// Power up the ADCs by setting the pd bit
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn power_up(&self) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Powerdown
         self.send_reg(
             &mut transport,
-            SleepPd {
+            &SleepPd {
                 pd: false,
                 ..Default::default()
             },
@@ -234,13 +268,16 @@ where
     }
 
     /// Power cycles all the ADCs selected by the current chip select
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn power_cycle(&mut self) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Powerdown
         self.send_reg(
             &mut transport,
-            SleepPd {
+            &SleepPd {
                 pd: true,
                 ..Default::default()
             },
@@ -251,7 +288,7 @@ where
         for i in 0..=7 {
             self.cs = ChipSelect::by_number(i);
             // Powerup
-            self.send_reg(&mut transport, SleepPd::default())?;
+            self.send_reg(&mut transport, &SleepPd::default())?;
         }
         // Restore old cs
         self.cs = old_cs;
@@ -259,61 +296,73 @@ where
     }
 
     /// Selects a test pattern or sampled data for all the adc currently selected
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn enable_pattern(&self, pat: TestPattern) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        self.send_reg(&mut transport, PatternCtl::default())?;
-        self.send_reg(&mut transport, DeskewSyncPattern::default())?;
+        self.send_reg(&mut transport, &PatternCtl::default())?;
+        self.send_reg(&mut transport, &DeskewSyncPattern::default())?;
         match pat {
             TestPattern::Ramp => self.send_reg(
                 &mut transport,
-                PatternCtl {
+                &PatternCtl {
                     pattern: Pattern::Ramp,
                 },
             ),
             TestPattern::Deskew => self.send_reg(
                 &mut transport,
-                DeskewSyncPattern {
+                &DeskewSyncPattern {
                     pat_deskew_sync: DeskewSyncMode::Deskew,
                 },
             ),
             TestPattern::Sync => self.send_reg(
                 &mut transport,
-                DeskewSyncPattern {
+                &DeskewSyncPattern {
                     pat_deskew_sync: DeskewSyncMode::Sync,
                 },
             ),
             TestPattern::Custom1 | TestPattern::Custom2 => self.send_reg(
                 &mut transport,
-                PatternCtl {
+                &PatternCtl {
                     pattern: Pattern::SingleCustom,
                 },
             ),
             TestPattern::Dual => self.send_reg(
                 &mut transport,
-                PatternCtl {
+                &PatternCtl {
                     pattern: Pattern::DualCustom,
                 },
             ),
-            _ => Ok(()),
+            TestPattern::None => Ok(()),
         }
     }
 
     /// Set the "Custom 1 " pattern
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn custom_1(&self, bits: [bool; 8]) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        self.send_reg(&mut transport, CustomPattern1 { bits_custom1: bits })
+        self.send_reg(&mut transport, &CustomPattern1 { bits_custom1: bits })
     }
 
     /// Set the "Custom 2 " pattern
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn custom_2(&self, bits: [bool; 8]) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        self.send_reg(&mut transport, CustomPattern2 { bits_custom2: bits })
+        self.send_reg(&mut transport, &CustomPattern2 { bits_custom2: bits })
     }
 
     /// Perform a bitslip operation on specified chips
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn bitslip(&self, bitslips: Bitslip) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -328,6 +377,9 @@ where
     }
 
     /// Request a snapshot - reads from the corresponding BRAM happen elsewhere
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn snap_req(&self) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -342,9 +394,12 @@ where
         Ok(())
     }
 
-    /// Set the operating mode along with the clock frequency in MHz
+    /// Set the operating mode along with the clock frequency in megahertz
     /// We will *always* set the clock divide to 1, as is done in the python. Wouldn't be that bad
     /// to change, but would need manual intervention at init time.
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn set_operating_mode(&self, mode: AdcMode, freq: f64) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -368,13 +423,16 @@ where
         };
 
         // Send all the bits
-        self.send_reg(&mut transport, chan_cfg)?;
-        self.send_reg(&mut transport, low_clk)?;
+        self.send_reg(&mut transport, &chan_cfg)?;
+        self.send_reg(&mut transport, &low_clk)?;
 
         Ok(())
     }
 
     /// Startup the ADCs into a clean slate
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn init(&mut self, mode: AdcMode, freq: f64) -> anyhow::Result<()> {
         self.reset()?;
         self.power_down()?;
@@ -384,6 +442,9 @@ where
     }
 
     /// Set the crossbars in the chip selected adc
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn input_select(&self, inputs: ChannelInput) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -412,14 +473,14 @@ where
         // Write the inputs
         self.send_reg(
             &mut transport,
-            InputSelect12 {
+            &InputSelect12 {
                 inp_sel_adc1: selections[0],
                 inp_sel_adc2: selections[1],
             },
         )?;
         self.send_reg(
             &mut transport,
-            InputSelect34 {
+            &InputSelect34 {
                 inp_sel_adc3: selections[2],
                 inp_sel_adc4: selections[3],
             },
@@ -428,12 +489,15 @@ where
     }
 
     /// Disable LVDS terminations
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn disable_termination(&self) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         self.send_reg(
             &mut transport,
-            LvdsTerminations {
+            &LvdsTerminations {
                 en_lvds_term: false,
                 ..Default::default()
             },
@@ -441,6 +505,9 @@ where
     }
 
     /// Set the three LVDS terminations
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn set_terminations(
         &self,
         lclk: LvdsTermination,
@@ -451,7 +518,7 @@ where
         let mut transport = (*tarc).lock().unwrap();
         self.send_reg(
             &mut transport,
-            LvdsTerminations {
+            &LvdsTerminations {
                 en_lvds_term: true,
                 term_lclk: lclk,
                 term_frame: frame,
@@ -461,6 +528,9 @@ where
     }
 
     /// Set the LVDS drive strengths
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn set_drive_strength(
         &self,
         lclk: LvdsDriveStrength,
@@ -471,7 +541,7 @@ where
         let mut transport = (*tarc).lock().unwrap();
         self.send_reg(
             &mut transport,
-            LvdsDrives {
+            &LvdsDrives {
                 ilvds_lclk: lclk,
                 ilvds_frame: frame,
                 ilvds_dat: data,
@@ -510,6 +580,7 @@ pub enum TestPattern {
 
 #[derive(PackedStruct, Default, Debug, PartialEq, Copy, Clone)]
 #[packed_struct(bit_numbering = "msb0")]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ChipSelect {
     #[packed_field(bits = "7")]
     pub a: bool,
@@ -531,8 +602,10 @@ pub struct ChipSelect {
 
 impl ChipSelect {
     /// Select every ADC this controller supports
+    #[must_use]
+    #[allow(clippy::missing_panics_doc)]
     pub fn select_all() -> Self {
-        Self::unpack_from_slice(&[0b11111111]).unwrap()
+        Self::unpack_from_slice(&[0b1111_1111]).unwrap()
     }
 
     fn by_number(v: u8) -> Self {
@@ -612,6 +685,7 @@ pub enum DemuxMode {
 
 #[derive(PackedStruct, Default, Debug, PartialEq)]
 #[packed_struct(bit_numbering = "msb0")]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Bitslip {
     #[packed_field(bits = "7")]
     a: bool,

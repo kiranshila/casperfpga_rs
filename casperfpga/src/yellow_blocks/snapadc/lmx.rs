@@ -6,18 +6,21 @@ use std::sync::{
 
 /// Internal SNAP clock synthesizer - LMX2581
 #[derive(Debug)]
-pub struct LmxSynth<T> {
+pub struct Synth<T> {
     /// Upwards pointer to the parent class' transport
-    transport: Weak<Mutex<T>>,
+    _transport: Weak<Mutex<T>>,
 }
 
-impl<T> LmxSynth<T>
+impl<T> Synth<T>
 where
     T: Transport,
 {
-    const NAME: &'static str = "lmx_ctrl";
+    const _NAME: &'static str = "lmx_ctrl";
 
+    #[must_use]
     pub fn new(transport: Weak<Mutex<T>>) -> Self {
-        Self { transport }
+        Self {
+            _transport: transport,
+        }
     }
 }

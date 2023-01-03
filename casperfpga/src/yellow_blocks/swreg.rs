@@ -4,9 +4,9 @@
 //! application. The design itself can specify a custom bitwidth up to 32 bits, but I/O will always
 //! be to 32 bits, bailing at runtime on overflow conditions.
 //!
-//! There are two unique types for this register, signed fixed point ([FixedSoftwareRegister]) and
-//! boolean ([BooleanSoftwareRegister]). Both of these types will have read
-//! and write methods, bailing on write if [Direction] isn't [Direction::FromProcessor].
+//! There are two unique types for this register, signed fixed point ([`FixedSoftwareRegister`]) and
+//! boolean ([`BooleanSoftwareRegister`]). Both of these types will have read
+//! and write methods, bailing on write if [Direction] isn't [`Direction::FromProcessor`].
 //!
 //! Interactions with this block require the use of types from the [fixed](https://docs.rs/fixed/latest/fixed/) crate,
 //! and are currently a little clunky as that crate hasn't fully updated to use const-generics for
@@ -83,6 +83,9 @@ where
         }
     }
 
+    /// Builds a [`FixedSoftwareRegister`] from FPG description strings
+    /// # Errors
+    /// Returns an error on bad string arguments
     pub fn from_fpg(
         transport: Weak<Mutex<T>>,
         reg_name: &str,
@@ -104,6 +107,10 @@ where
         })
     }
 
+    /// Reads a fixed point number from the register
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn read(&self) -> anyhow::Result<F> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -111,13 +118,18 @@ where
         Ok(F::from_be_bytes(transport.read(&self.name, 0)?))
     }
 
+    /// Write a fixed point number to the register
+    /// # Errors
+    /// Returns an error on bad transport
+    /// # Panics
+    /// Panics if the width of the register is more than 32 bits (it should never be)
     pub fn write(&self, val: &F) -> anyhow::Result<()> {
         // Check direction
         if self.direction == Direction::ToProcessor {
             bail!("This software register is read-only");
         }
         // Check width
-        if val > &(2_usize.pow(self.width as u32) - 1 / 2_usize.pow(F::FRAC_NBITS)) {
+        if val > &(2_usize.pow(self.width.try_into().unwrap()) - 1 / 2_usize.pow(F::FRAC_NBITS)) {
             bail!("Source value too large for register size");
         }
         let tarc = self.transport.upgrade().unwrap();
@@ -140,6 +152,9 @@ where
         }
     }
 
+    /// Builds a [`BooleanSoftwareRegister`] from FPG description strings
+    /// # Errors
+    /// Returns an error on bad string arguments
     pub fn from_fpg(
         transport: Weak<Mutex<T>>,
         reg_name: &str,
@@ -158,6 +173,10 @@ where
         })
     }
 
+    /// Reads a boolean from the register
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn read(&self) -> anyhow::Result<bool> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -166,6 +185,10 @@ where
         Ok(raw == 1)
     }
 
+    /// Writes a boolean to the register
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn write(&self, val: bool) -> anyhow::Result<()> {
         if self.direction == Direction::ToProcessor {
             bail!("This software register is read-only");
@@ -173,7 +196,7 @@ where
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Perform the write
-        transport.write(&self.name, 0, &(val as u32))
+        transport.write(&self.name, 0, &(u32::from(val)))
     }
 }
 

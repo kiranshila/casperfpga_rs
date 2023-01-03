@@ -11,7 +11,7 @@ use self::{
         Source,
     },
     controller::{
-        Adc16Controller,
+        Adc16,
         ChannelInput,
         ChipSelect,
     },
@@ -19,7 +19,7 @@ use self::{
         LvdsDriveStrength,
         LvdsTermination,
     },
-    lmx::LmxSynth,
+    lmx::Synth,
 };
 use crate::transport::Transport;
 use anyhow::bail;
@@ -53,11 +53,11 @@ pub struct SnapAdc<T> {
     /// Clock Switch
     pub clksw: ClockSwitch<T>,
     /// LMX Synthesizer,
-    pub synth: LmxSynth<T>,
+    pub synth: Synth<T>,
     /// ADC Controller
-    pub controller: Adc16Controller<T>,
+    pub controller: Adc16<T>,
     /// Register name
-    name: String,
+    _name: String,
 }
 
 impl<T> SnapAdc<T>
@@ -68,6 +68,9 @@ where
     const RAM1_NAME: &str = "adc16_wb_ram1";
     const RAM2_NAME: &str = "adc16_wb_ram2";
 
+    /// Builds a [`SnapAdc`] from FPG description strings
+    /// # Errors
+    /// Returns an error on bad string arguments
     pub fn from_fpg(
         transport: Weak<Mutex<T>>,
         reg_name: &str,
@@ -86,8 +89,8 @@ where
             bail!("Only the  8 bit resolution HMCAD1511 is supported - PRs welcome :)");
         }
         let clksw = ClockSwitch::new(transport.clone());
-        let synth = LmxSynth::new(transport.clone());
-        let controller = Adc16Controller::new(transport.clone());
+        let synth = Synth::new(transport.clone());
+        let controller = Adc16::new(transport.clone());
         let source = match clock_src {
             "sys_clk" => Source::Internal,
             _ => Source::External,
@@ -99,12 +102,15 @@ where
             clksw,
             synth,
             controller,
-            name: reg_name.to_string(),
+            _name: reg_name.to_string(),
             source,
         })
     }
 
     /// Request a snapshot of `chip`
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn snapshot(&self, chip: SnapAdcChip) -> anyhow::Result<[u8; 1024]> {
         // Request the snapshot
         self.controller.snap_req()?;
@@ -122,6 +128,9 @@ where
     }
 
     /// Initializes the ADCs - follow this up by setting the controller crossbar and calibrating
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn initialize(&mut self) -> anyhow::Result<()> {
         // Chip select all the ADCs in the SNAP
         self.controller.chip_select(&ChipSelect::select_all());
@@ -167,6 +176,10 @@ where
     }
 
     /// Set the crossbars - ensures we match the number of channels
+    /// # Errors
+    /// Returns an error on bad transport
+    /// # Panics
+    /// Panics if the given input selection does not match the current mode
     pub fn select_inputs(&self, inputs: ChannelInput) -> anyhow::Result<()> {
         // Extract channel mode and assert
         match self.mode {

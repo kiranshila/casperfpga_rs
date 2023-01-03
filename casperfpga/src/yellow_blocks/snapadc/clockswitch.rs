@@ -25,10 +25,15 @@ where
 {
     const NAME: &'static str = "adc16_use_synth";
 
+    #[must_use]
     pub fn new(transport: Weak<Mutex<T>>) -> Self {
         Self { transport }
     }
 
+    /// Sets the source of the clock switch
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn set_source(&self, source: Source) -> anyhow::Result<()> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -38,6 +43,10 @@ where
         }
     }
 
+    /// Gets the source of the clock switch
+    /// # Errors
+    /// Returns an error on bad transport
+    #[allow(clippy::missing_panics_doc)]
     pub fn get_source(&self) -> anyhow::Result<Source> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();

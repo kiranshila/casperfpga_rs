@@ -61,8 +61,8 @@ pub fn address(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let generated = quote! {
         impl Address for #ident {
-            fn addr() -> u8 {
-                #num as u8
+            fn addr() -> u16 {
+                #num as u16
             }
         }
         #item
