@@ -132,6 +132,8 @@ where
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
     pub fn initialize(&mut self) -> anyhow::Result<()> {
+        // Start off with a reset
+        self.controller.reset()?;
         // Chip select all the ADCs in the SNAP
         self.controller.chip_select(&ChipSelect::select_all());
         // Set the clock switch based on the source

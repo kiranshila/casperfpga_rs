@@ -15,7 +15,7 @@ use std::{
 };
 
 const DEFAULT_TIMEOUT: f32 = 0.1;
-const DEFAULT_RETRIES: usize = 3;
+const DEFAULT_RETRIES: usize = 7; // up to 1.7s
 
 #[derive(Debug)]
 /// A TAPCP Connection (newtype for a [`UdpSocket`])
