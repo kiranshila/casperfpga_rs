@@ -15,10 +15,14 @@ use std::{
 };
 
 const DEFAULT_TIMEOUT: f32 = 0.1;
+const DEFAULT_RETRIES: usize = 3;
 
 #[derive(Debug)]
 /// A TAPCP Connection (newtype for a [`UdpSocket`])
-pub struct Tapcp(UdpSocket);
+pub struct Tapcp {
+    socket: UdpSocket,
+    retries: usize,
+}
 
 impl Tapcp {
     /// Create and connect to a TAPCP transport
@@ -28,11 +32,15 @@ impl Tapcp {
         let socket = UdpSocket::bind("0.0.0.0:0")?;
         // Set a default timeout
         let timeout = Duration::from_secs_f32(DEFAULT_TIMEOUT);
+        socket.set_write_timeout(Some(timeout))?;
         socket.set_read_timeout(Some(timeout))?;
         // Connect
         socket.connect(host)?;
         // And return
-        Ok(Self(socket))
+        Ok(Self {
+            socket,
+            retries: DEFAULT_RETRIES,
+        })
     }
 }
 
@@ -41,7 +49,7 @@ impl Tapcp {
 impl Transport for Tapcp {
     fn is_running(&mut self) -> anyhow::Result<bool> {
         // Check if sys_clkcounter exists
-        match tapcp::read_device("sys_clkcounter", 0, 1, &mut self.0) {
+        match tapcp::read_device("sys_clkcounter", 0, 1, &mut self.socket, self.retries) {
             Ok(_) => Ok(true),
             // In the case we get back a file not found error,
             // that implies the device is not running a user program.
@@ -65,7 +73,7 @@ impl Transport for Tapcp {
         // them. Because we don't want to do this read when we don't have to, we will branch
         if (offset % 4) == 0 && (data.len() % 4) == 0 {
             // Just do the write
-            tapcp::write_device(device, offset % 4, data, &mut self.0)?;
+            tapcp::write_device(device, offset % 4, data, &mut self.socket, self.retries)?;
         } else {
             todo!()
         }
@@ -73,7 +81,7 @@ impl Transport for Tapcp {
     }
 
     fn listdev(&mut self) -> anyhow::Result<RegisterMap> {
-        let devices = tapcp::listdev(&mut self.0)?;
+        let devices = tapcp::listdev(&mut self.socket, self.retries)?;
         Ok(devices
             .iter()
             .map(|(k, (addr, len))| {
@@ -110,7 +118,7 @@ impl Transport for Tapcp {
         let first_word = offset / 4;
         let last_word = (offset + n) / 4;
         let word_n = last_word - first_word;
-        let bytes = tapcp::read_device(device, first_word, word_n, &mut self.0)?;
+        let bytes = tapcp::read_device(device, first_word, word_n, &mut self.socket, self.retries)?;
         // Now we slice out the the relevant chunk
         let start_idx = offset % 4;
         Ok(bytes[start_idx..start_idx + n].to_vec())
@@ -122,7 +130,7 @@ impl Tapcp {
     /// # Errors
     /// Returns errors on transport failures
     pub fn temperature(&mut self) -> anyhow::Result<f32> {
-        tapcp::temp(&mut self.0)
+        tapcp::temp(&mut self.socket, self.retries)
     }
 }
 

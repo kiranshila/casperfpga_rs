@@ -17,16 +17,16 @@ use tftp::Mode;
 /// Returns an error on TFTP errors
 /// # Panics
 /// Panics if we did not get back enough bytes
-pub fn temp(socket: &mut UdpSocket) -> anyhow::Result<f32> {
-    let bytes = tftp::read("/temp", socket, Mode::Octet)?;
+pub fn temp(socket: &mut UdpSocket, retries: usize) -> anyhow::Result<f32> {
+    let bytes = tftp::read("/temp", socket, Mode::Octet, retries)?;
     Ok(f32::from_be_bytes(bytes[..4].try_into()?))
 }
 
 /// Gets the list of top level commands (as a string)
 /// # Errors
 /// Returns an error on TFTP errors
-pub fn help(socket: &mut UdpSocket) -> anyhow::Result<String> {
-    let bytes = tftp::read("/help", socket, Mode::NetASCII)?;
+pub fn help(socket: &mut UdpSocket, retries: usize) -> anyhow::Result<String> {
+    let bytes = tftp::read("/help", socket, Mode::NetASCII, retries)?;
     Ok(std::str::from_utf8(&bytes)?.to_string())
 }
 
@@ -34,11 +34,14 @@ pub fn help(socket: &mut UdpSocket) -> anyhow::Result<String> {
 /// Returns a hash map from device name to (addr,length)
 /// # Errors
 /// Returns an error on TFTP errors
-pub fn listdev(socket: &mut UdpSocket) -> anyhow::Result<HashMap<String, (u32, u32)>> {
+pub fn listdev(
+    socket: &mut UdpSocket,
+    retries: usize,
+) -> anyhow::Result<HashMap<String, (u32, u32)>> {
     // Create the hash map we'll be constructing to hold the device list
     let mut dev_map = HashMap::new();
 
-    let bytes = tftp::read("/listdev", socket, Mode::Octet)?;
+    let bytes = tftp::read("/listdev", socket, Mode::Octet, retries)?;
     // Bytes back from this are stored as CSL, so we'll use Dave's C program to uncompress it
     // The CSL lib has internal state for some reason
 
@@ -88,11 +91,12 @@ pub fn read_device(
     offset: usize,
     n: usize,
     socket: &mut UdpSocket,
+    retries: usize,
 ) -> anyhow::Result<Vec<u8>> {
     // To start the request, we need to form the filename string, defined by the TAPCP
     // spec as - `/dev/DEV_NAME[.WORD_OFFSET[.NWORDS]]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/dev/{device}.{offset:x}.{n:x}");
-    let bytes = tftp::read(&filename, socket, Mode::Octet)?;
+    let bytes = tftp::read(&filename, socket, Mode::Octet, retries)?;
     if n != 0 && bytes.len() != n * 4 {
         bail!("We did not receive the number of bytes we expected");
     }
@@ -107,21 +111,27 @@ pub fn write_device(
     offset: usize,
     data: &[u8],
     socket: &mut UdpSocket,
+    retries: usize,
 ) -> anyhow::Result<()> {
     // To start the request, we need to form the filename string, defined by the TAPCP
     // spec as - `/dev/DEV_NAME[.WORD_OFFSET]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/dev/{device}.{offset:x}");
     // Then do it
-    tftp::write(&filename, data, socket)
+    tftp::write(&filename, data, socket, retries)
 }
 
 /// Read memory from the onboard flash
 /// `offset` and `n` are in increments of 4 byte words, just like `read_device`
 /// # Errors
 /// Returns an error on TFTP errors
-pub fn read_flash(offset: usize, n: usize, socket: &mut UdpSocket) -> anyhow::Result<Vec<u8>> {
+pub fn read_flash(
+    offset: usize,
+    n: usize,
+    socket: &mut UdpSocket,
+    retries: usize,
+) -> anyhow::Result<Vec<u8>> {
     // spec as - `/flash.WORD_OFFSET[.NWORDS]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/flash.{offset:x}.{n:x}");
-    let bytes = tftp::read(&filename, socket, Mode::Octet)?;
+    let bytes = tftp::read(&filename, socket, Mode::Octet, retries)?;
     Ok(bytes)
 }

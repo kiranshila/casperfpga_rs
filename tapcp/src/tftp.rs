@@ -7,6 +7,7 @@ use std::{
     fmt::Display,
     net::UdpSocket,
     str::FromStr,
+    time::Duration,
 };
 
 use anyhow::bail;
@@ -87,6 +88,8 @@ pub enum Error {
     BadErrorCode,
     #[error("We didn't get back a block number we expected: {0}")]
     BadBlock(u16),
+    #[error("Retry count exceeded")]
+    Timeout,
 }
 
 #[derive(Debug)]
@@ -110,6 +113,54 @@ pub(crate) enum Payload {
         error_code: ErrorCode,
         error_msg: String,
     },
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn backoff_read(socket: &mut UdpSocket, buf: &mut [u8], retries: usize) -> anyhow::Result<usize> {
+    let mut retry_count = 0usize;
+    let nbytes;
+    loop {
+        if retry_count == retries {
+            bail!(Error::Timeout);
+        }
+        std::thread::sleep(Duration::from_secs_f64(
+            (2f64.powf(retry_count as f64) - 1f64) / 1000f64,
+        ));
+        match socket.recv(buf) {
+            Ok(v) => {
+                nbytes = v;
+                break;
+            }
+            Err(e) => match e.kind() {
+                // Compat for both windows and *nix
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => retry_count += 1,
+                _ => return Err(e.into()),
+            },
+        }
+    }
+    Ok(nbytes)
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn backoff_write(socket: &mut UdpSocket, data: &[u8], retries: usize) -> anyhow::Result<()> {
+    let mut retry_count = 0usize;
+    loop {
+        if retry_count == retries {
+            bail!(Error::Timeout);
+        }
+        std::thread::sleep(Duration::from_secs_f64(
+            (2f64.powf(retry_count as f64) - 1f64) / 1000f64,
+        ));
+        match socket.send(data) {
+            Ok(_) => break,
+            Err(e) => match e.kind() {
+                // Compat for both windows and *nix
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => retry_count += 1,
+                _ => return Err(e.into()),
+            },
+        }
+    }
+    Ok(())
 }
 
 impl Payload {
@@ -218,8 +269,13 @@ impl Payload {
     }
 }
 
-/// Read from a filename and get back the bytes
-pub(crate) fn read(filename: &str, socket: &mut UdpSocket, mode: Mode) -> anyhow::Result<Vec<u8>> {
+/// Read from a filename and get back the bytes - retries with exponential backoff on "EAGAIN"
+pub(crate) fn read(
+    filename: &str,
+    socket: &mut UdpSocket,
+    mode: Mode,
+    retries: usize,
+) -> anyhow::Result<Vec<u8>> {
     // Create the buffer we will use to read into. The biggest this can be is 512 bytes of data,
     // plus 4 bytes of header
     let mut buf = [0u8; 516];
@@ -230,11 +286,12 @@ pub(crate) fn read(filename: &str, socket: &mut UdpSocket, mode: Mode) -> anyhow
         filename: filename.to_string(),
         mode,
     };
-    // Write out this payload
-    socket.send(&rrq.pack())?;
+    // Write out this payload with retries
+    backoff_write(socket, &rrq.pack(), retries)?;
+
     loop {
-        // Read and deserialize the responses
-        let nbytes = socket.recv(&mut buf)?;
+        // Read and deserialize the responses with retries and backoff
+        let nbytes = backoff_read(socket, &mut buf, retries)?;
         let resp = Payload::unpack(&buf[..nbytes])?;
         match resp {
             Payload::Data { block, ref data } => {
@@ -259,7 +316,12 @@ pub(crate) fn read(filename: &str, socket: &mut UdpSocket, mode: Mode) -> anyhow
 }
 
 /// Write the bytes from `data` to the TFTP server at `filename`
-pub(crate) fn write(filename: &str, data: &[u8], socket: &mut UdpSocket) -> anyhow::Result<()> {
+pub(crate) fn write(
+    filename: &str,
+    data: &[u8],
+    socket: &mut UdpSocket,
+    retries: usize,
+) -> anyhow::Result<()> {
     // We start the transfer with the WRQ (write request)
     let wrq = Payload::Write {
         filename: filename.to_string(),
@@ -270,9 +332,9 @@ pub(crate) fn write(filename: &str, data: &[u8], socket: &mut UdpSocket) -> anyh
     // In the case of error messages, we will limit the string payload to 512 bytes, like the data
     let mut buf = [0u8; 516];
     // Write out this payload
-    socket.send(&wrq.pack())?;
+    backoff_write(socket, &wrq.pack(), retries)?;
     // We should receive either an ACK of block 0 or ERROR
-    let nbytes = socket.recv(&mut buf)?;
+    let nbytes = backoff_read(socket, &mut buf, retries)?;
     match Payload::unpack(&buf[..nbytes])? {
         Payload::Ack { block } => {
             if block != 0 {
@@ -294,9 +356,9 @@ pub(crate) fn write(filename: &str, data: &[u8], socket: &mut UdpSocket) -> anyh
             data: chunk.to_vec(),
         };
         // Send
-        socket.send(&data_payload.pack())?;
+        backoff_write(socket, &data_payload.pack(), retries)?;
         // Wait for the ACK
-        let nbytes = socket.recv(&mut buf)?;
+        let nbytes = backoff_read(socket, &mut buf, retries)?;
         // Which should match the index we just sent
         match Payload::unpack(&buf[..nbytes])? {
             Payload::Ack { block } => {
