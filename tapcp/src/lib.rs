@@ -1,3 +1,6 @@
+#![deny(clippy::all)]
+#![warn(clippy::pedantic)]
+
 mod csl;
 pub mod tftp;
 
@@ -10,12 +13,18 @@ use std::{
 use tftp::Mode;
 
 /// Gets the temperature of the remote device in Celsius
+/// # Errors
+/// Returns an error on TFTP errors
+/// # Panics
+/// Panics if we did not get back enough bytes
 pub fn temp(socket: &mut UdpSocket) -> anyhow::Result<f32> {
     let bytes = tftp::read("/temp", socket, Mode::Octet)?;
     Ok(f32::from_be_bytes(bytes[..4].try_into()?))
 }
 
 /// Gets the list of top level commands (as a string)
+/// # Errors
+/// Returns an error on TFTP errors
 pub fn help(socket: &mut UdpSocket) -> anyhow::Result<String> {
     let bytes = tftp::read("/help", socket, Mode::NetASCII)?;
     Ok(std::str::from_utf8(&bytes)?.to_string())
@@ -23,6 +32,8 @@ pub fn help(socket: &mut UdpSocket) -> anyhow::Result<String> {
 
 /// Gets the list of all devices supported by the currently running gateware
 /// Returns a hash map from device name to (addr,length)
+/// # Errors
+/// Returns an error on TFTP errors
 pub fn listdev(socket: &mut UdpSocket) -> anyhow::Result<HashMap<String, (u32, u32)>> {
     // Create the hash map we'll be constructing to hold the device list
     let mut dev_map = HashMap::new();
@@ -50,7 +61,7 @@ pub fn listdev(socket: &mut UdpSocket) -> anyhow::Result<HashMap<String, (u32, u
         // Now key *should* be valid
         // Safety: We're trusting Dave gives us ptrs to valid ASCII
         // and we can safely reinterpret the *const u8 and *const i8 because they share a size
-        let key = unsafe { CStr::from_ptr(key_ptr as *const i8) }
+        let key = unsafe { CStr::from_ptr(key_ptr.cast::<i8>()) }
             .to_str()?
             .into();
 
@@ -70,6 +81,8 @@ pub fn listdev(socket: &mut UdpSocket) -> anyhow::Result<HashMap<String, (u32, u
 /// Read memory associated with the gateware device `device`
 /// We can read `offset` words (4 bytes) into a given device in multiples on `n` words
 /// The special case of `n` = 0 will read all the bytes at that location
+/// # Errors
+/// Returns an error on TFTP errors
 pub fn read_device(
     device: &str,
     offset: usize,
@@ -87,6 +100,8 @@ pub fn read_device(
 }
 
 /// Write bytes to the device named `device`
+/// # Errors
+/// Returns an error on TFTP errors
 pub fn write_device(
     device: &str,
     offset: usize,
@@ -102,6 +117,8 @@ pub fn write_device(
 
 /// Read memory from the onboard flash
 /// `offset` and `n` are in increments of 4 byte words, just like `read_device`
+/// # Errors
+/// Returns an error on TFTP errors
 pub fn read_flash(offset: usize, n: usize, socket: &mut UdpSocket) -> anyhow::Result<Vec<u8>> {
     // spec as - `/flash.WORD_OFFSET[.NWORDS]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/flash.{offset:x}.{n:x}");

@@ -291,7 +291,7 @@ pub(crate) fn write(filename: &str, data: &[u8], socket: &mut UdpSocket) -> anyh
         // Send the (i+1)th chunk (because chunks are 1-indexed)
         // Prepare the data payload
         let data_payload = Payload::Data {
-            block: (i + 1) as u16,
+            block: (i + 1).try_into().expect("i+1 didn't fit in a u16"),
             data: chunk.to_vec(),
         };
         // Send

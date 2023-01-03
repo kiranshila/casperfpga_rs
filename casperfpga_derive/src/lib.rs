@@ -54,6 +54,7 @@ pub fn derive_casper_serde(tokens: TokenStream) -> TokenStream {
 /// writing
 /// # Panics
 /// Panics on bad address literals
+#[allow(clippy::manual_let_else)]
 pub fn address(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr = match syn::parse::<syn::Lit>(attr).expect("Error parsing attribute") {
         syn::Lit::Int(v) => v,
