@@ -27,34 +27,33 @@ use nom::{
 };
 use std::{
     collections::HashMap,
-    fs::File,
     io::Read,
     path::Path,
     str::from_utf8,
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct FpgRegister {
+pub struct Register {
     pub addr: u32,
     pub size: u32,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct FpgDevice {
+pub struct Device {
     pub kind: String,
-    pub register: Option<FpgRegister>,
+    pub register: Option<Register>,
     pub metadata: HashMap<KString, String>,
 }
 
-impl FpgDevice {
+impl Device {
     fn add_meta(&mut self, k: KString, v: String) {
         self.metadata.insert(k, v);
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct FpgFile {
-    pub devices: HashMap<KString, FpgDevice>,
+pub struct File {
+    pub devices: HashMap<KString, Device>,
     pub bitstream: Vec<u8>,
 }
 
@@ -114,19 +113,19 @@ fn quit(input: &[u8]) -> IResult<&[u8], &[u8]> {
     terminated(tag("?quit"), line_ending)(input)
 }
 
-pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], FpgFile> {
+pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], File> {
     let (remaining, _) = shebang(input)?;
     let (remaining, _) = uploadbin(remaining)?;
     let (remaining, registers) = many0(register)(remaining)?;
     let (remaining, metas) = many0(meta)(remaining)?;
     let (bitstream, _) = quit(remaining)?;
 
-    let mut registers: HashMap<KString, FpgRegister> = registers
+    let mut registers: HashMap<KString, Register> = registers
         .into_iter()
-        .map(|(name, addr, size)| (name.to_owned().into(), FpgRegister { addr, size }))
+        .map(|(name, addr, size)| (name.to_owned().into(), Register { addr, size }))
         .collect();
 
-    let mut devices: HashMap<KString, FpgDevice> = HashMap::new();
+    let mut devices: HashMap<KString, Device> = HashMap::new();
 
     for (name, kind, k, v) in metas {
         match devices.get_mut(&name) {
@@ -136,7 +135,7 @@ pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], FpgFile> {
             None => {
                 devices.insert(
                     name.clone(),
-                    FpgDevice {
+                    Device {
                         kind: kind.to_owned(),
                         metadata: HashMap::from_iter([(k.to_owned().into(), v.to_owned())]),
                         register: registers.remove(&name),
@@ -148,7 +147,7 @@ pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], FpgFile> {
 
     Ok((
         bitstream,
-        FpgFile {
+        File {
             devices,
             bitstream: bitstream.into(),
         },
@@ -156,11 +155,13 @@ pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], FpgFile> {
 }
 
 /// Reads a CASPER-specific FPG file
-pub fn read_fpg_file<T>(filename: T) -> anyhow::Result<FpgFile>
+/// # Errors
+/// Returns an error on invalid FPG files
+pub fn read_fpg_file<T>(filename: T) -> anyhow::Result<File>
 where
     T: AsRef<Path>,
 {
-    let mut file = File::open(filename)?;
+    let mut file = std::fs::File::open(filename)?;
     let mut contents = Vec::new();
     file.read_to_end(&mut contents)?;
     let (_, file) = fpg_file(&contents)
@@ -226,7 +227,7 @@ mod tests {
         let (_, file) = fpg_file(&input).unwrap();
         assert_eq!(
             *file.devices.get("SNAP").unwrap(),
-            FpgDevice {
+            Device {
                 kind: "xps:xsg".to_owned(),
                 register: None,
                 metadata: HashMap::from_iter([("clk_rate".into(), "250".to_owned())])
@@ -234,10 +235,10 @@ mod tests {
         );
         assert_eq!(
             *file.devices.get("tx_en").unwrap(),
-            FpgDevice {
+            Device {
                 kind: "xps:sw_reg".to_owned(),
-                register: Some(FpgRegister {
-                    addr: 217404,
+                register: Some(Register {
+                    addr: 217_404,
                     size: 4
                 }),
                 metadata: HashMap::from_iter([("bitwidths".into(), "32".to_owned())])

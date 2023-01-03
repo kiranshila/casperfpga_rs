@@ -3,7 +3,7 @@
 
 use casper_utils::bitstream::fpg::{
     read_fpg_file,
-    FpgDevice,
+    Device,
 };
 use kstring::KString;
 use proc_macro::TokenStream;
@@ -90,7 +90,7 @@ impl Parse for FpgFpga {
     }
 }
 
-fn fixed_type(dev: &FpgDevice) -> proc_macro2::TokenStream {
+fn fixed_type(dev: &Device) -> proc_macro2::TokenStream {
     let bin_pts: u32 = dev
         .metadata
         .get("bin_pts")
@@ -105,7 +105,7 @@ fn fixed_type(dev: &FpgDevice) -> proc_macro2::TokenStream {
     }
 }
 
-fn disambiguate_sw_reg(dev: &FpgDevice) -> proc_macro2::TokenStream {
+fn disambiguate_sw_reg(dev: &Device) -> proc_macro2::TokenStream {
     // Unfortunatley, software registers are not uniquely determined by their fpg type, we need
     // additional metadata to know what rust types they become
     match dev.metadata.get("arith_types").unwrap().as_str() {
@@ -118,7 +118,7 @@ fn disambiguate_sw_reg(dev: &FpgDevice) -> proc_macro2::TokenStream {
     }
 }
 
-fn kind_to_type(dev: &FpgDevice) -> Option<proc_macro2::TokenStream> {
+fn kind_to_type(dev: &Device) -> Option<proc_macro2::TokenStream> {
     match dev.kind.as_str() {
         "xps:sw_reg" => Some(disambiguate_sw_reg(dev)),
         "xps:ten_gbe" => Some(quote!(casperfpga::yellow_blocks::ten_gbe::TenGbE::<T>)),
@@ -130,7 +130,7 @@ fn kind_to_type(dev: &FpgDevice) -> Option<proc_macro2::TokenStream> {
 
 fn dev_to_constructor(
     name: &str,
-    devices: &HashMap<KString, FpgDevice>,
+    devices: &HashMap<KString, Device>,
 ) -> Option<proc_macro2::TokenStream> {
     // So, some devices will require entries from *other* devices, like SNAP ADCs needing to know
     // the clock source, so we'll pass in a single key to the device map and the map itself, so we
@@ -198,7 +198,7 @@ fn dev_to_constructor(
     }
 }
 
-fn generate_struct_fields(devices: &HashMap<KString, FpgDevice>) -> Vec<proc_macro2::TokenStream> {
+fn generate_struct_fields(devices: &HashMap<KString, Device>) -> Vec<proc_macro2::TokenStream> {
     devices
         .iter()
         .filter_map(|(name, dev)| {
@@ -215,7 +215,7 @@ fn generate_struct_fields(devices: &HashMap<KString, FpgDevice>) -> Vec<proc_mac
         .collect()
 }
 
-fn generate_field_names(devices: &HashMap<KString, FpgDevice>) -> Vec<Ident> {
+fn generate_field_names(devices: &HashMap<KString, Device>) -> Vec<Ident> {
     devices
         .iter()
         .filter_map(|(name, dev)| {
@@ -228,7 +228,7 @@ fn generate_field_names(devices: &HashMap<KString, FpgDevice>) -> Vec<Ident> {
         .collect()
 }
 
-fn generate_constructors(devices: &HashMap<KString, FpgDevice>) -> Vec<proc_macro2::TokenStream> {
+fn generate_constructors(devices: &HashMap<KString, Device>) -> Vec<proc_macro2::TokenStream> {
     devices
         .iter()
         .filter_map(|(name, _)| dev_to_constructor(name, devices))

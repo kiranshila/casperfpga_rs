@@ -218,7 +218,6 @@ impl Payload {
     }
 }
 
-// In the context of TAPCP, these are quick operations. No need to use progress bars here
 /// Read from a filename and get back the bytes
 pub(crate) fn read(filename: &str, socket: &mut UdpSocket, mode: Mode) -> anyhow::Result<Vec<u8>> {
     // Create the buffer we will use to read into. The biggest this can be is 512 bytes of data,
