@@ -5,12 +5,19 @@ mod csl;
 pub mod tftp;
 
 use anyhow::bail;
+use kstring::KString;
 use std::{
     collections::HashMap,
-    ffi::CStr,
+    ffi::{
+        CStr,
+        CString,
+    },
     net::UdpSocket,
 };
 use tftp::Mode;
+
+// Flash address of user flash in words
+pub const USER_FLASH_LOC: usize = 0x0080_0000 / 4;
 
 /// Gets the temperature of the remote device in Celsius
 /// # Errors
@@ -134,4 +141,49 @@ pub fn read_flash(
     let filename = format!("/flash.{offset:x}.{n:x}");
     let bytes = tftp::read(&filename, socket, Mode::Octet, retries)?;
     Ok(bytes)
+}
+
+/// Reboot the FPGA from the bitstream program at the 32-bit address `addr`.
+/// No validation is performed to ensure a program actually exists there
+/// # Errors
+/// Returns an error on TFTP errors
+pub fn progdev(addr: u32, socket: &mut UdpSocket, retries: usize) -> anyhow::Result<()> {
+    tftp::write("/progdev", &addr.to_be_bytes(), socket, retries)?;
+    Ok(())
+}
+
+/// Retrieves the most recent metadata
+/// # Errors
+/// Returns an error on TFTP errors or if the metadata couldn't be found
+pub fn metadata(
+    socket: &mut UdpSocket,
+    retries: usize,
+) -> anyhow::Result<HashMap<KString, String>> {
+    let mut dict_str = String::new();
+    let mut chunks = 0;
+    let chunk_size = 1024 / 4;
+    loop {
+        if chunks > 128 {
+            bail!("No metadata found");
+        }
+        let raw = read_flash(
+            USER_FLASH_LOC + chunks * chunk_size,
+            chunk_size,
+            socket,
+            retries,
+        )?;
+        dict_str.push_str(&CString::new(raw)?.into_string()?);
+        match dict_str.find("?end") {
+            Some(idx) => {
+                dict_str = dict_str.split_at(idx).0.to_string();
+                break;
+            }
+            None => chunks += 1,
+        }
+    }
+    Ok(dict_str
+        .split('?')
+        .filter_map(|kv| kv.split_once('\t'))
+        .map(|(k, v)| (k.to_string().into(), v.to_string()))
+        .collect())
 }

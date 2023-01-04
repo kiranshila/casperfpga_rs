@@ -2,6 +2,7 @@
 //! As there is no formal specification of this format, the parsing logic here uses the
 //! "implementation as spec"
 use anyhow::anyhow;
+use flate2::bufread::GzDecoder;
 use kstring::KString;
 use nom::{
     bytes::complete::{
@@ -164,8 +165,15 @@ where
     let mut file = std::fs::File::open(filename)?;
     let mut contents = Vec::new();
     file.read_to_end(&mut contents)?;
-    let (_, file) = fpg_file(&contents)
+    let (_, mut file) = fpg_file(&contents)
         .map_err(|_| anyhow!("Error parsing fpg file, are you sure it's valid?"))?;
+    // Check if file's bitsream bytes is compressed (Gzip), and if so, decompress
+    if file.bitstream[..3] == [0x1F, 0x8B, 0x08] {
+        let mut z = GzDecoder::new(&file.bitstream[..]);
+        let mut decompressed = vec![];
+        z.read_to_end(&mut decompressed)?;
+        file.bitstream = decompressed;
+    }
     Ok(file)
 }
 
