@@ -11,6 +11,7 @@ packed_struct = "0.10"
 kstring = "2"
 fixed = "1"
 typenum = "1"
+indicatif = "0.17"
 
 [lib]
 name = "casperfpga"

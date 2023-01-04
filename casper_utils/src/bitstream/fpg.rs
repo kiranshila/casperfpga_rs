@@ -28,6 +28,7 @@ use nom::{
 };
 use std::{
     collections::HashMap,
+    ffi::OsString,
     io::Read,
     path::Path,
     str::from_utf8,
@@ -56,6 +57,8 @@ impl Device {
 pub struct File {
     pub devices: HashMap<KString, Device>,
     pub bitstream: Vec<u8>,
+    pub md5: [u8; 16],
+    pub filename: OsString,
 }
 
 fn shebang(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -114,7 +117,9 @@ fn quit(input: &[u8]) -> IResult<&[u8], &[u8]> {
     terminated(tag("?quit"), line_ending)(input)
 }
 
-pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], File> {
+type AlmostFile = (HashMap<KString, Device>, Vec<u8>);
+
+pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], AlmostFile> {
     let (remaining, _) = shebang(input)?;
     let (remaining, _) = uploadbin(remaining)?;
     let (remaining, registers) = many0(register)(remaining)?;
@@ -146,27 +151,32 @@ pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], File> {
         }
     }
 
-    Ok((
-        bitstream,
-        File {
-            devices,
-            bitstream: bitstream.into(),
-        },
-    ))
+    Ok((bitstream, (devices, bitstream.into())))
 }
 
 /// Reads a CASPER-specific FPG file
 /// # Errors
 /// Returns an error on invalid FPG files
+#[allow(clippy::missing_panics_doc)]
 pub fn read_fpg_file<T>(filename: T) -> anyhow::Result<File>
 where
-    T: AsRef<Path>,
+    T: AsRef<Path> + Clone,
 {
-    let mut file = std::fs::File::open(filename)?;
+    let mut file = std::fs::File::open(filename.clone())?;
     let mut contents = Vec::new();
     file.read_to_end(&mut contents)?;
-    let (_, mut file) = fpg_file(&contents)
+
+    // Calculate the MD5
+    let md5 = md5::compute(&contents);
+
+    let (_, (devs, bs)) = fpg_file(&contents)
         .map_err(|_| anyhow!("Error parsing fpg file, are you sure it's valid?"))?;
+    let mut file = File {
+        devices: devs,
+        bitstream: bs,
+        md5: md5.into(),
+        filename: filename.as_ref().file_name().unwrap().to_owned(),
+    };
     // Check if file's bitsream bytes is compressed (Gzip), and if so, decompress
     if file.bitstream[..3] == [0x1F, 0x8B, 0x08] {
         let mut z = GzDecoder::new(&file.bitstream[..]);
@@ -232,9 +242,9 @@ mod tests {
 
         input.append(&mut vec![0xDE, 0xAD, 0xBE, 0xEF]);
 
-        let (_, file) = fpg_file(&input).unwrap();
+        let (_, (devs, bs)) = fpg_file(&input).unwrap();
         assert_eq!(
-            *file.devices.get("SNAP").unwrap(),
+            *devs.get("SNAP").unwrap(),
             Device {
                 kind: "xps:xsg".to_owned(),
                 register: None,
@@ -242,7 +252,7 @@ mod tests {
             }
         );
         assert_eq!(
-            *file.devices.get("tx_en").unwrap(),
+            *devs.get("tx_en").unwrap(),
             Device {
                 kind: "xps:sw_reg".to_owned(),
                 register: Some(Register {
@@ -252,6 +262,6 @@ mod tests {
                 metadata: HashMap::from_iter([("bitwidths".into(), "32".to_owned())])
             }
         );
-        assert_eq!(file.bitstream, vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        assert_eq!(bs, vec![0xDE, 0xAD, 0xBE, 0xEF]);
     }
 }

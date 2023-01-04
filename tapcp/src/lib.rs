@@ -8,10 +8,7 @@ use anyhow::bail;
 use kstring::KString;
 use std::{
     collections::HashMap,
-    ffi::{
-        CStr,
-        CString,
-    },
+    ffi::CStr,
     net::UdpSocket,
 };
 use tftp::Mode;
@@ -186,7 +183,7 @@ pub fn get_metadata(
             socket,
             retries,
         )?;
-        dict_str.push_str(&CString::new(raw)?.into_string()?);
+        dict_str.push_str(&String::from_utf8(raw)?);
         match dict_str.find("?end") {
             Some(idx) => {
                 dict_str = dict_str.split_at(idx).0.to_string();
@@ -205,6 +202,7 @@ pub fn get_metadata(
 /// Program arbitrary metadata (stored at the 32-bit `user_flash_loc` address)
 /// # Errors
 /// Returns an error on TFTP errors or if the metadata couldn't be found
+#[allow(clippy::implicit_hasher)]
 pub fn set_metadata(
     data: &HashMap<KString, String>,
     socket: &mut UdpSocket,
@@ -221,7 +219,7 @@ pub fn set_metadata(
     let mut bytes = dict_str.as_bytes().to_vec();
     // Padding
     if bytes.len() % 1024 != 0 {
-        bytes.append(&mut vec![0u8; 1024 - bytes.len() % 1024]);
+        bytes.append(&mut vec![b'0'; 1024 - bytes.len() % 1024]);
     }
     // Write
     write_flash((user_flash_loc / 4) as usize, &bytes, socket, retries)

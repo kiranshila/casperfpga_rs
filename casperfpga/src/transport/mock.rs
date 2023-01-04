@@ -100,7 +100,7 @@ impl Transport for Mock {
         Ok(self.registers.clone())
     }
 
-    fn program(&mut self, _fpg_file: &fpg::File) -> anyhow::Result<()> {
+    fn program(&mut self, _fpg_file: &fpg::File, force: bool) -> anyhow::Result<()> {
         todo!()
     }
 

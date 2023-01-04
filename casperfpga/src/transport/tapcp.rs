@@ -117,7 +117,14 @@ impl Transport for Tapcp {
             .collect())
     }
 
-    fn program(&mut self, fpg_file: &fpg::File) -> anyhow::Result<()> {
+    fn program(&mut self, _fpg_file: &fpg::File, force: bool) -> anyhow::Result<()> {
+        // Set the timeout high as flash writes can take up to 1s
+        self.socket
+            .set_read_timeout(Some(Duration::from_secs_f32(1.5)))
+            .unwrap();
+        self.socket
+            .set_write_timeout(Some(Duration::from_secs_f32(1.5)))
+            .unwrap();
         todo!()
     }
 
@@ -157,6 +164,33 @@ impl Tapcp {
     /// Returns errors on transport failures
     pub fn metadata(&mut self) -> anyhow::Result<HashMap<KString, String>> {
         tapcp::get_metadata(
+            &mut self.socket,
+            self.platform.flash_location(),
+            self.retries,
+        )
+    }
+
+    /// Update the metadata entry given an FPG file.
+    /// Currently not completley compatible with python as we only store filename and md5
+    /// # Panics
+    /// Panics if the filename of fpg file is not a valid rust string
+    fn update_metadata(&mut self, file: &fpg::File) -> anyhow::Result<()> {
+        let meta = HashMap::from([
+            ("sector_size", tapcp::FLASH_SECTOR_SIZE.to_string()),
+            (
+                "md5sum",
+                file.md5
+                    .iter()
+                    .map(|&v| format!("{v:x}"))
+                    .collect::<String>(),
+            ),
+            ("filename", file.filename.clone().into_string().unwrap()),
+        ])
+        .into_iter()
+        .map(|(k, v)| (k.into(), v))
+        .collect();
+        tapcp::set_metadata(
+            &meta,
             &mut self.socket,
             self.platform.flash_location(),
             self.retries,
@@ -275,9 +309,9 @@ pub(crate) mod python {
             }
 
             #[pyo3(text_signature = "($self, filename)")]
-            fn program(&mut self, filename: String) -> PyResult<()> {
+            fn program(&mut self, filename: String, force: bool) -> PyResult<()> {
                 let file = fpg::read_fpg_file(filename)?;
-                Ok(self.0.program(&file)?)
+                Ok(self.0.program(&file, force)?)
             }
 
             #[pyo3(text_signature = "($self)")]

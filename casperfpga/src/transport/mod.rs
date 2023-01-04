@@ -8,7 +8,6 @@ use crate::{
     core::RegisterMap,
     yellow_blocks::Address,
 };
-use std::path::Path;
 
 /// Types that implement this trait can be serialized such that they can be written to FPGA software
 /// registers
@@ -202,10 +201,12 @@ pub trait Transport {
     /// Returns errors on bad transport
     fn listdev(&mut self) -> anyhow::Result<RegisterMap>;
 
-    /// Program a bitstream file from `filename` to the connected platform
+    /// Program a bitstream file from `filename` to the connected platform.
+    /// Some transports can cache programed bitstreams, so the `force` variable turns off noop-ing
+    /// if the bitstream is already programmed.
     /// # Errors
     /// Returns errors on bad transport
-    fn program(&mut self, fpg_file: &fpg::File) -> anyhow::Result<()>;
+    fn program(&mut self, fpg_file: &fpg::File, force: bool) -> anyhow::Result<()>;
 
     /// Deprograms the connected platform
     /// # Errors
