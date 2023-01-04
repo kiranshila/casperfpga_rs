@@ -7,6 +7,7 @@ use std::{
 };
 
 const RETRIES: usize = 7;
+const SNAP_FLASH_LOC: u32 = 0x800000;
 
 fn main() -> anyhow::Result<()> {
     // Setup the socket
@@ -18,6 +19,6 @@ fn main() -> anyhow::Result<()> {
     // Connect
     let host_addr: SocketAddr = "192.168.0.3:69".parse()?;
     socket.connect(host_addr)?;
-    dbg!(tapcp::metadata(&mut socket, RETRIES)?);
+    dbg!(tapcp::get_metadata(&mut socket, SNAP_FLASH_LOC, RETRIES)?);
     Ok(())
 }

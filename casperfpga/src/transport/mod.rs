@@ -2,6 +2,8 @@
 pub mod mock;
 pub mod tapcp;
 
+use casper_utils::bitstream::fpg;
+
 use crate::{
     core::RegisterMap,
     yellow_blocks::Address,
@@ -203,9 +205,7 @@ pub trait Transport {
     /// Program a bitstream file from `filename` to the connected platform
     /// # Errors
     /// Returns errors on bad transport
-    fn program<P>(&mut self, filename: &P) -> anyhow::Result<()>
-    where
-        P: AsRef<Path>;
+    fn program(&mut self, fpg_file: &fpg::File) -> anyhow::Result<()>;
 
     /// Deprograms the connected platform
     /// # Errors

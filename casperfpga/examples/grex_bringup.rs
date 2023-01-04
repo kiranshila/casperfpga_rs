@@ -4,7 +4,10 @@
 use std::net::Ipv4Addr;
 
 use casperfpga::{
-    transport::tapcp::Tapcp,
+    transport::tapcp::{
+        Platform,
+        Tapcp,
+    },
     yellow_blocks::snapadc::{
         controller::ChannelInput,
         hmcad1511::InputSelect,
@@ -19,7 +22,7 @@ fpga_from_fpg!(
 
 fn main() -> anyhow::Result<()> {
     // Create the transport and connect
-    let transport = Tapcp::connect("192.168.0.3:69".parse()?)?;
+    let transport = Tapcp::connect("192.168.0.3:69".parse()?, Platform::SNAP)?;
     let mut fpga = GrexFpga::new(transport)?;
 
     // Setup the ADCs

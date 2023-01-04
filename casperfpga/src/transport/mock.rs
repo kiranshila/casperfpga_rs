@@ -9,6 +9,7 @@ use anyhow::{
     anyhow,
     bail,
 };
+use casper_utils::bitstream::fpg;
 use std::collections::HashMap;
 
 /// A platform that mocks reads and writes, useful for testing
@@ -99,10 +100,7 @@ impl Transport for Mock {
         Ok(self.registers.clone())
     }
 
-    fn program<P>(&mut self, _filename: &P) -> anyhow::Result<()>
-    where
-        P: AsRef<std::path::Path>,
-    {
+    fn program(&mut self, _fpg_file: &fpg::File) -> anyhow::Result<()> {
         todo!()
     }
 

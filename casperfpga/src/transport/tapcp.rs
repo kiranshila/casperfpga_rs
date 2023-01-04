@@ -6,7 +6,10 @@ use crate::core::{
     RegisterMap,
 };
 use anyhow::bail;
+use casper_utils::bitstream::fpg;
+use kstring::KString;
 use std::{
+    collections::HashMap,
     net::{
         SocketAddr,
         UdpSocket,
@@ -17,18 +20,35 @@ use std::{
 const DEFAULT_TIMEOUT: f32 = 0.1;
 const DEFAULT_RETRIES: usize = 7; // up to 1.7s
 
+/// Platforms that support TAPCP
+#[derive(Debug, Copy, Clone)]
+pub enum Platform {
+    SNAP,
+    SNAP2,
+}
+
+impl Platform {
+    fn flash_location(self) -> u32 {
+        match self {
+            Platform::SNAP => 0x0080_0000,
+            Platform::SNAP2 => 0x00C0_0000,
+        }
+    }
+}
+
 #[derive(Debug)]
 /// A TAPCP Connection (newtype for a [`UdpSocket`])
 pub struct Tapcp {
     socket: UdpSocket,
     retries: usize,
+    platform: Platform,
 }
 
 impl Tapcp {
     /// Create and connect to a TAPCP transport
     /// # Errors
     /// Will return an error if the UDP socket fails to connect
-    pub fn connect(host: SocketAddr) -> anyhow::Result<Self> {
+    pub fn connect(host: SocketAddr, platform: Platform) -> anyhow::Result<Self> {
         let socket = UdpSocket::bind("0.0.0.0:0")?;
         // Set a default timeout
         let timeout = Duration::from_secs_f32(DEFAULT_TIMEOUT);
@@ -40,6 +60,7 @@ impl Tapcp {
         Ok(Self {
             socket,
             retries: DEFAULT_RETRIES,
+            platform,
         })
     }
 }
@@ -96,15 +117,12 @@ impl Transport for Tapcp {
             .collect())
     }
 
-    fn program<P>(&mut self, _filename: &P) -> anyhow::Result<()>
-    where
-        P: AsRef<std::path::Path>,
-    {
+    fn program(&mut self, fpg_file: &fpg::File) -> anyhow::Result<()> {
         todo!()
     }
 
     fn deprogram(&mut self) -> anyhow::Result<()> {
-        todo!()
+        tapcp::progdev(0, &mut self.socket, self.retries)
     }
 
     fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> anyhow::Result<Vec<u8>> {
@@ -125,6 +143,7 @@ impl Transport for Tapcp {
     }
 }
 
+// Tapcp-specific methods
 impl Tapcp {
     /// Gets the temperature from the connected device in Celsius
     /// # Errors
@@ -132,27 +151,47 @@ impl Tapcp {
     pub fn temperature(&mut self) -> anyhow::Result<f32> {
         tapcp::temp(&mut self.socket, self.retries)
     }
+
+    /// Gets the metadata for the current data
+    /// # Errors
+    /// Returns errors on transport failures
+    pub fn metadata(&mut self) -> anyhow::Result<HashMap<KString, String>> {
+        tapcp::get_metadata(
+            &mut self.socket,
+            self.platform.flash_location(),
+            self.retries,
+        )
+    }
 }
 
 #[cfg(feature = "python")]
 #[allow(clippy::pedantic)]
 pub(crate) mod python {
+    use super::*;
     use crate::transport::Transport;
+    use anyhow::anyhow;
+    use casper_utils::bitstream::fpg;
     use pyo3::{
         conversion::ToPyObject,
         prelude::*,
         types::PyBytes,
     };
     pub(crate) fn add_tapcp(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-        /// Transport via TAPCP - connects on construction
+        /// Transport via TAPCP - connects on construction.
+        /// Requires a platform string, either "SNAP" or "SNAP2".
         #[pyclass(text_signature = "(ip)")]
         struct Tapcp(super::Tapcp);
 
         #[pymethods]
         impl Tapcp {
             #[new]
-            fn new(ip: &str) -> PyResult<Self> {
-                let inner = super::Tapcp::connect(ip.parse()?)?;
+            fn new(ip: String, platform: String) -> PyResult<Self> {
+                let plat = match platform.as_ref() {
+                    "snap" => Platform::SNAP,
+                    "snap2" => Platform::SNAP2,
+                    _ => return Err(anyhow!("Unsupported platform").into()),
+                };
+                let inner = super::Tapcp::connect(ip.parse()?, plat)?;
                 Ok(Tapcp(inner))
             }
 
@@ -237,7 +276,8 @@ pub(crate) mod python {
 
             #[pyo3(text_signature = "($self, filename)")]
             fn program(&mut self, filename: String) -> PyResult<()> {
-                Ok(self.0.program(&filename)?)
+                let file = fpg::read_fpg_file(filename)?;
+                Ok(self.0.program(&file)?)
             }
 
             #[pyo3(text_signature = "($self)")]

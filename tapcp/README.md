@@ -4,6 +4,10 @@ A rust implementation of the [TAPCP](https://github.com/casper-astro/mlib_devel/
 
 Currently not quite feature complete, mainly missing interactions with the flash memory.
 
+## TODO
+
+Reimplement CSL in rust so we don't have to rely on an external C compiler and unsafe FFI
+
 ## Why does this include an implementation of TFTP
 
 I couldn't find a TFTP client crate and it seemed easy enough with "canonical" implementations only ~300 lines of C.

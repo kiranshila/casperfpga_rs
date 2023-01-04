@@ -16,8 +16,7 @@ use std::{
 };
 use tftp::Mode;
 
-// Flash address of user flash in words
-pub const USER_FLASH_LOC: usize = 0x0080_0000 / 4;
+pub const FLASH_SECTOR_SIZE: u32 = 0x10000;
 
 /// Gets the temperature of the remote device in Celsius
 /// # Errors
@@ -143,6 +142,20 @@ pub fn read_flash(
     Ok(bytes)
 }
 
+/// Writes data to the onboard flash
+/// `offset` are in increments of 4 byte words, just like `read_device`
+/// # Errors
+/// Returns an error on TFTP errors
+pub fn write_flash(
+    offset: usize,
+    data: &[u8],
+    socket: &mut UdpSocket,
+    retries: usize,
+) -> anyhow::Result<()> {
+    let filename = format!("/flash.{offset:x}");
+    tftp::write(&filename, data, socket, retries)
+}
+
 /// Reboot the FPGA from the bitstream program at the 32-bit address `addr`.
 /// No validation is performed to ensure a program actually exists there
 /// # Errors
@@ -152,11 +165,12 @@ pub fn progdev(addr: u32, socket: &mut UdpSocket, retries: usize) -> anyhow::Res
     Ok(())
 }
 
-/// Retrieves the most recent metadata
+/// Retrieves the most recent metadata (stored at the 32-bit `user_flash_loc` address)
 /// # Errors
 /// Returns an error on TFTP errors or if the metadata couldn't be found
-pub fn metadata(
+pub fn get_metadata(
     socket: &mut UdpSocket,
+    user_flash_loc: u32,
     retries: usize,
 ) -> anyhow::Result<HashMap<KString, String>> {
     let mut dict_str = String::new();
@@ -167,8 +181,8 @@ pub fn metadata(
             bail!("No metadata found");
         }
         let raw = read_flash(
-            USER_FLASH_LOC + chunks * chunk_size,
-            chunk_size,
+            (user_flash_loc / 4 + chunks * chunk_size) as usize,
+            chunk_size as usize,
             socket,
             retries,
         )?;
@@ -186,4 +200,29 @@ pub fn metadata(
         .filter_map(|kv| kv.split_once('\t'))
         .map(|(k, v)| (k.to_string().into(), v.to_string()))
         .collect())
+}
+
+/// Program arbitrary metadata (stored at the 32-bit `user_flash_loc` address)
+/// # Errors
+/// Returns an error on TFTP errors or if the metadata couldn't be found
+pub fn set_metadata(
+    data: &HashMap<KString, String>,
+    socket: &mut UdpSocket,
+    user_flash_loc: u32,
+    retries: usize,
+) -> anyhow::Result<()> {
+    // Dict is written as ?<key>\t<value> pairs followed by ?end
+    // It must be padded with zeros to be a multiple of 1024
+    let mut dict_str = data
+        .iter()
+        .map(|(k, v)| format!("?{k}\t{v}"))
+        .collect::<String>();
+    dict_str.push_str("?end");
+    let mut bytes = dict_str.as_bytes().to_vec();
+    // Padding
+    if bytes.len() % 1024 != 0 {
+        bytes.append(&mut vec![0u8; 1024 - bytes.len() % 1024]);
+    }
+    // Write
+    write_flash((user_flash_loc / 4) as usize, &bytes, socket, retries)
 }
