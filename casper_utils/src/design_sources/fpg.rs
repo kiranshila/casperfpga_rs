@@ -1,6 +1,11 @@
 //! This module contains the logic for parsing and interpreting the CASPER-Specific FPG files.
 //! As there is no formal specification of this format, the parsing logic here uses the
 //! "implementation as spec"
+use super::{
+    Device,
+    FpgaDesign,
+    Register,
+};
 use anyhow::anyhow;
 use flate2::bufread::GzDecoder;
 use kstring::KString;
@@ -35,30 +40,25 @@ use std::{
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Register {
-    pub addr: u32,
-    pub size: u32,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Device {
-    pub kind: String,
-    pub register: Option<Register>,
-    pub metadata: HashMap<KString, String>,
-}
-
-impl Device {
-    fn add_meta(&mut self, k: KString, v: String) {
-        self.metadata.insert(k, v);
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
 pub struct File {
     pub devices: HashMap<KString, Device>,
     pub bitstream: Vec<u8>,
     pub md5: [u8; 16],
     pub filename: OsString,
+}
+
+impl FpgaDesign for File {
+    fn bitstream(&self) -> &Vec<u8> {
+        &self.bitstream
+    }
+
+    fn md5(&self) -> &[u8; 16] {
+        &self.md5
+    }
+
+    fn devices(&self) -> &super::Devices {
+        &self.devices
+    }
 }
 
 fn shebang(input: &[u8]) -> IResult<&[u8], &[u8]> {

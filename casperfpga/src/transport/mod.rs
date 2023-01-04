@@ -2,12 +2,11 @@
 pub mod mock;
 pub mod tapcp;
 
-use casper_utils::bitstream::fpg;
-
 use crate::{
     core::RegisterMap,
     yellow_blocks::Address,
 };
+use casper_utils::design_sources::FpgaDesign;
 
 /// Types that implement this trait can be serialized such that they can be written to FPGA software
 /// registers
@@ -206,7 +205,9 @@ pub trait Transport {
     /// if the bitstream is already programmed.
     /// # Errors
     /// Returns errors on bad transport
-    fn program(&mut self, fpg_file: &fpg::File, force: bool) -> anyhow::Result<()>;
+    fn program<D>(&mut self, design: &D, force: bool) -> anyhow::Result<()>
+    where
+        D: FpgaDesign;
 
     /// Deprograms the connected platform
     /// # Errors

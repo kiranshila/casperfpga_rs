@@ -10,10 +10,71 @@ use std::{
     collections::HashMap,
     ffi::CStr,
     net::UdpSocket,
+    time::Duration,
 };
 use tftp::Mode;
 
 pub const FLASH_SECTOR_SIZE: u32 = 0x10000;
+
+/// "Outter retries" - on valid TFTP responses, but errors (not socket errors) with slight delays
+fn retry_read(
+    filename: &str,
+    socket: &mut UdpSocket,
+    mode: Mode,
+    retries: usize,
+) -> anyhow::Result<Vec<u8>> {
+    let mut attempts = 0;
+    loop {
+        if attempts == retries {
+            break;
+        }
+        match tftp::read(filename, socket, mode, retries) {
+            Ok(b) => return Ok(b),
+            Err(e) => {
+                let tftp_e = e.downcast::<tftp::Error>()?;
+                match tftp_e {
+                    tftp::Error::ErrorResponse(_, _) | tftp::Error::Timeout => {
+                        attempts += 1;
+                        std::thread::sleep(Duration::from_secs_f64(0.1));
+                        continue;
+                    }
+                    _ => return Err(tftp_e.into()),
+                }
+            }
+        }
+    }
+    bail!("Too many failing attempts")
+}
+
+/// "Outter retries" - on valid TFTP responses, but errors (not socket errors)
+fn retry_write(
+    filename: &str,
+    data: &[u8],
+    socket: &mut UdpSocket,
+    retries: usize,
+) -> anyhow::Result<()> {
+    let mut attempts = 0;
+    loop {
+        if attempts == retries {
+            break;
+        }
+        match tftp::write(filename, data, socket, retries) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                let tftp_e = e.downcast::<tftp::Error>()?;
+                match tftp_e {
+                    tftp::Error::ErrorResponse(_, _) | tftp::Error::Timeout => {
+                        attempts += 1;
+                        std::thread::sleep(Duration::from_secs_f64(0.1));
+                        continue;
+                    }
+                    _ => return Err(tftp_e.into()),
+                }
+            }
+        }
+    }
+    bail!("Too many failing attempts")
+}
 
 /// Gets the temperature of the remote device in Celsius
 /// # Errors
@@ -21,7 +82,7 @@ pub const FLASH_SECTOR_SIZE: u32 = 0x10000;
 /// # Panics
 /// Panics if we did not get back enough bytes
 pub fn temp(socket: &mut UdpSocket, retries: usize) -> anyhow::Result<f32> {
-    let bytes = tftp::read("/temp", socket, Mode::Octet, retries)?;
+    let bytes = retry_read("/temp", socket, Mode::Octet, retries)?;
     Ok(f32::from_be_bytes(bytes[..4].try_into()?))
 }
 
@@ -29,7 +90,7 @@ pub fn temp(socket: &mut UdpSocket, retries: usize) -> anyhow::Result<f32> {
 /// # Errors
 /// Returns an error on TFTP errors
 pub fn help(socket: &mut UdpSocket, retries: usize) -> anyhow::Result<String> {
-    let bytes = tftp::read("/help", socket, Mode::NetASCII, retries)?;
+    let bytes = retry_read("/help", socket, Mode::NetASCII, retries)?;
     Ok(std::str::from_utf8(&bytes)?.to_string())
 }
 
@@ -44,7 +105,7 @@ pub fn listdev(
     // Create the hash map we'll be constructing to hold the device list
     let mut dev_map = HashMap::new();
 
-    let bytes = tftp::read("/listdev", socket, Mode::Octet, retries)?;
+    let bytes = retry_read("/listdev", socket, Mode::Octet, retries)?;
     // Bytes back from this are stored as CSL, so we'll use Dave's C program to uncompress it
     // The CSL lib has internal state for some reason
 
@@ -99,7 +160,7 @@ pub fn read_device(
     // To start the request, we need to form the filename string, defined by the TAPCP
     // spec as - `/dev/DEV_NAME[.WORD_OFFSET[.NWORDS]]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/dev/{device}.{offset:x}.{n:x}");
-    let bytes = tftp::read(&filename, socket, Mode::Octet, retries)?;
+    let bytes = retry_read(&filename, socket, Mode::Octet, retries)?;
     if n != 0 && bytes.len() != n * 4 {
         bail!("We did not receive the number of bytes we expected");
     }
@@ -120,7 +181,7 @@ pub fn write_device(
     // spec as - `/dev/DEV_NAME[.WORD_OFFSET]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/dev/{device}.{offset:x}");
     // Then do it
-    tftp::write(&filename, data, socket, retries)
+    retry_write(&filename, data, socket, retries)
 }
 
 /// Read memory from the onboard flash
@@ -135,7 +196,7 @@ pub fn read_flash(
 ) -> anyhow::Result<Vec<u8>> {
     // spec as - `/flash.WORD_OFFSET[.NWORDS]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/flash.{offset:x}.{n:x}");
-    let bytes = tftp::read(&filename, socket, Mode::Octet, retries)?;
+    let bytes = retry_read(&filename, socket, Mode::Octet, retries)?;
     Ok(bytes)
 }
 
@@ -150,15 +211,17 @@ pub fn write_flash(
     retries: usize,
 ) -> anyhow::Result<()> {
     let filename = format!("/flash.{offset:x}");
-    tftp::write(&filename, data, socket, retries)
+    retry_write(&filename, data, socket, retries)
 }
 
 /// Reboot the FPGA from the bitstream program at the 32-bit address `addr`.
 /// No validation is performed to ensure a program actually exists there
 /// # Errors
 /// Returns an error on TFTP errors
-pub fn progdev(addr: u32, socket: &mut UdpSocket, retries: usize) -> anyhow::Result<()> {
-    tftp::write("/progdev", &addr.to_be_bytes(), socket, retries)?;
+pub fn progdev(addr: u32, socket: &mut UdpSocket) -> anyhow::Result<()> {
+    match tftp::write("/progdev", &addr.to_be_bytes(), socket, 1) {
+        Ok(_) | Err(_) => (),
+    }
     Ok(())
 }
 

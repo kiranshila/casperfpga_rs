@@ -1,12 +1,14 @@
 //! In this example, we will connect to a SNAP over TAPCP, program a file, calibrate the ADCs, and
 //! setup the 10 GbE core.
 
-use std::net::Ipv4Addr;
-
+use casper_utils::design_sources::fpg::read_fpg_file;
 use casperfpga::{
-    transport::tapcp::{
-        Platform,
-        Tapcp,
+    transport::{
+        tapcp::{
+            Platform,
+            Tapcp,
+        },
+        Transport,
     },
     yellow_blocks::snapadc::{
         controller::ChannelInput,
@@ -15,6 +17,7 @@ use casperfpga::{
 };
 use casperfpga_derive::fpga_from_fpg;
 use fixed::types::U32F0;
+use std::net::Ipv4Addr;
 fpga_from_fpg!(
     GrexFpga,
     "/home/kiran/Projects/Rust/casperfpga/casperfpga/examples/grex_gateware.fpg"
@@ -22,8 +25,13 @@ fpga_from_fpg!(
 
 fn main() -> anyhow::Result<()> {
     // Create the transport and connect
-    let transport = Tapcp::connect("192.168.0.3:69".parse()?, Platform::SNAP)?;
-    let mut fpga = GrexFpga::new(transport)?;
+    let mut fpga = GrexFpga::new(Tapcp::connect("192.168.0.3:69".parse()?, Platform::SNAP)?)?;
+
+    // Program the design
+    let design = read_fpg_file(
+        "/home/kiran/Projects/Rust/casperfpga/casperfpga/examples/grex_gateware.fpg",
+    )?;
+    fpga.transport.lock().unwrap().program(&design, true)?;
 
     // Setup the ADCs
     fpga.snap_adc.initialize()?;

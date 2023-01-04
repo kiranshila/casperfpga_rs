@@ -9,7 +9,7 @@ use anyhow::{
     anyhow,
     bail,
 };
-use casper_utils::bitstream::fpg;
+use casper_utils::design_sources::FpgaDesign;
 use std::collections::HashMap;
 
 /// A platform that mocks reads and writes, useful for testing
@@ -100,7 +100,10 @@ impl Transport for Mock {
         Ok(self.registers.clone())
     }
 
-    fn program(&mut self, _fpg_file: &fpg::File, force: bool) -> anyhow::Result<()> {
+    fn program<D>(&mut self, _design: &D, _force: bool) -> anyhow::Result<()>
+    where
+        D: FpgaDesign,
+    {
         todo!()
     }
 

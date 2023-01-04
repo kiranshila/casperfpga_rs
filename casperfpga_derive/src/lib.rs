@@ -1,8 +1,8 @@
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 
-use casper_utils::bitstream::fpg::{
-    read_fpg_file,
+use casper_utils::design_sources::{
+    fpg::read_fpg_file,
     Device,
 };
 use kstring::KString;

@@ -269,7 +269,7 @@ impl Payload {
     }
 }
 
-/// Read from a filename and get back the bytes - retries with exponential backoff on "EAGAIN"
+/// Read from a filename and get back the bytes
 pub(crate) fn read(
     filename: &str,
     socket: &mut UdpSocket,

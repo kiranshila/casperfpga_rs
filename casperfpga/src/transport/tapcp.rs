@@ -6,7 +6,8 @@ use crate::core::{
     RegisterMap,
 };
 use anyhow::bail;
-use casper_utils::bitstream::fpg;
+use casper_utils::design_sources::FpgaDesign;
+use indicatif::ProgressBar;
 use kstring::KString;
 use std::{
     collections::HashMap,
@@ -33,6 +34,10 @@ impl Platform {
             Platform::SNAP => 0x0080_0000,
             Platform::SNAP2 => 0x00C0_0000,
         }
+    }
+
+    fn program_location(self) -> u32 {
+        self.flash_location() + tapcp::FLASH_SECTOR_SIZE
     }
 }
 
@@ -117,7 +122,21 @@ impl Transport for Tapcp {
             .collect())
     }
 
-    fn program(&mut self, _fpg_file: &fpg::File, force: bool) -> anyhow::Result<()> {
+    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_precision_loss)]
+    fn program<D>(&mut self, design: &D, force: bool) -> anyhow::Result<()>
+    where
+        D: FpgaDesign,
+    {
+        // First check to see if we even need to program by comparing the hashes
+        let meta = self.metadata()?;
+        if let Some(hash) = meta.get("md5") {
+            if hash == &design.md5_string() && !force {
+                return Ok(());
+            }
+        }
+        // Else we're programming!
         // Set the timeout high as flash writes can take up to 1s
         self.socket
             .set_read_timeout(Some(Duration::from_secs_f32(1.5)))
@@ -125,11 +144,55 @@ impl Transport for Tapcp {
         self.socket
             .set_write_timeout(Some(Duration::from_secs_f32(1.5)))
             .unwrap();
-        todo!()
+        // And we'll also set the retries higher
+        let retries = 8;
+
+        // The bitstream will start one tapcp::FLASH_SECTOR_SIZE away from the platform-specific
+        // flash location. We don't care about recording the header and this makes the program
+        // location consistent.
+        // We have to write in chunks of FLASH_SECTOR_SIZE as well
+        let bar = ProgressBar::new(
+            (design.bitstream().len() as f64 / f64::from(tapcp::FLASH_SECTOR_SIZE)).ceil() as u64,
+        );
+        bar.set_message("Writting bitstream");
+        for (idx, chunk) in design
+            .bitstream()
+            .chunks(tapcp::FLASH_SECTOR_SIZE as usize)
+            .enumerate()
+        {
+            tapcp::write_flash(
+                self.platform.program_location() as usize + tapcp::FLASH_SECTOR_SIZE as usize * idx,
+                chunk,
+                &mut self.socket,
+                retries,
+            )?;
+            bar.inc(1);
+        }
+        bar.finish();
+        // Then readback to verify
+        // TODO
+
+        // Set the metadata (to also indicate that we successfully programmed)
+        self.update_metadata(design)?;
+
+        // And reboot from the program location
+        // We expect an error because the whole design will freeze up
+
+        // Mystery bitshift
+        tapcp::progdev(
+            match self.platform {
+                Platform::SNAP => self.platform.program_location() >> 8,
+                Platform::SNAP2 => self.platform.program_location(),
+            },
+            &mut self.socket,
+        )?;
+        // Then wait as the FPGA takes a while to reboot
+        std::thread::sleep(Duration::from_secs(1));
+        Ok(())
     }
 
     fn deprogram(&mut self) -> anyhow::Result<()> {
-        tapcp::progdev(0, &mut self.socket, self.retries)
+        tapcp::progdev(0, &mut self.socket)
     }
 
     fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> anyhow::Result<Vec<u8>> {
@@ -159,7 +222,7 @@ impl Tapcp {
         tapcp::temp(&mut self.socket, self.retries)
     }
 
-    /// Gets the metadata for the current data
+    /// Gets the metadata for the currently programed design
     /// # Errors
     /// Returns errors on transport failures
     pub fn metadata(&mut self) -> anyhow::Result<HashMap<KString, String>> {
@@ -170,21 +233,17 @@ impl Tapcp {
         )
     }
 
-    /// Update the metadata entry given an FPG file.
-    /// Currently not completley compatible with python as we only store filename and md5
+    /// Update the metadata entry given a design
+    /// Currently not completley compatible with python as we only store the md5
     /// # Panics
     /// Panics if the filename of fpg file is not a valid rust string
-    fn update_metadata(&mut self, file: &fpg::File) -> anyhow::Result<()> {
+    fn update_metadata<D>(&mut self, design: &D) -> anyhow::Result<()>
+    where
+        D: FpgaDesign,
+    {
         let meta = HashMap::from([
             ("sector_size", tapcp::FLASH_SECTOR_SIZE.to_string()),
-            (
-                "md5sum",
-                file.md5
-                    .iter()
-                    .map(|&v| format!("{v:x}"))
-                    .collect::<String>(),
-            ),
-            ("filename", file.filename.clone().into_string().unwrap()),
+            ("md5", design.md5_string()),
         ])
         .into_iter()
         .map(|(k, v)| (k.into(), v))
@@ -204,7 +263,7 @@ pub(crate) mod python {
     use super::*;
     use crate::transport::Transport;
     use anyhow::anyhow;
-    use casper_utils::bitstream::fpg;
+    use casper_utils::design_sources::fpg;
     use pyo3::{
         conversion::ToPyObject,
         prelude::*,

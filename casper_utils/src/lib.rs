@@ -5,4 +5,4 @@
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 
-pub mod bitstream;
+pub mod design_sources;
