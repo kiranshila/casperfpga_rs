@@ -4,15 +4,28 @@
 //! This device controls and manages multiple HMCAD1511 ADCs
 
 #[allow(clippy::wildcard_imports)]
-use super::{hmcad1511::*, AdcMode};
+use super::{
+    hmcad1511::*,
+    AdcMode,
+};
 use crate::{
-    transport::{Deserialize, Serialize, Transport},
+    transport::{
+        Deserialize,
+        Serialize,
+        Transport,
+    },
     yellow_blocks::Address,
 };
 use anyhow::bail;
-use casperfpga_derive::{address, CasperSerde};
+use casperfpga_derive::{
+    address,
+    CasperSerde,
+};
 use packed_struct::prelude::*;
-use std::sync::{Mutex, Weak};
+use std::sync::{
+    Mutex,
+    Weak,
+};
 
 /// Controller for the ADC chips themselves
 #[derive(Debug)]

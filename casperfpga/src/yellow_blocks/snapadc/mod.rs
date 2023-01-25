@@ -6,14 +6,27 @@ pub mod hmcad1511;
 pub mod lmx;
 
 use self::{
-    clockswitch::{ClockSwitch, Source},
-    controller::{Adc16, ChannelInput, ChipSelect},
-    hmcad1511::{LvdsDriveStrength, LvdsTermination},
+    clockswitch::{
+        ClockSwitch,
+        Source,
+    },
+    controller::{
+        Adc16,
+        ChannelInput,
+        ChipSelect,
+    },
+    hmcad1511::{
+        LvdsDriveStrength,
+        LvdsTermination,
+    },
     lmx::Synth,
 };
 use crate::transport::Transport;
 use anyhow::bail;
-use std::sync::{Mutex, Weak};
+use std::sync::{
+    Mutex,
+    Weak,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 /// Valid modes for each HMCAD1511 ADC
