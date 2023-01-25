@@ -67,7 +67,7 @@ where
     T: Transport,
     F: Fixed<Bytes = [u8; 4]>,
 {
-    pub fn new(
+    #[must_use] pub fn new(
         transport: &Arc<Mutex<T>>,
         reg_name: &str,
         direction: Direction,
@@ -143,7 +143,7 @@ impl<T> BooleanSoftwareRegister<T>
 where
     T: Transport,
 {
-    pub fn new(transport: &Arc<Mutex<T>>, reg_name: &str, direction: Direction) -> Self {
+    #[must_use] pub fn new(transport: &Arc<Mutex<T>>, reg_name: &str, direction: Direction) -> Self {
         let transport = Arc::downgrade(transport);
         Self {
             transport,

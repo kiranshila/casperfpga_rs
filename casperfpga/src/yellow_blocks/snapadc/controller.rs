@@ -662,7 +662,7 @@ impl Adc3Wire {
     }
 }
 
-#[derive(PrimitiveEnum, Clone, Copy, PartialEq, Debug, Default)]
+#[derive(PrimitiveEnum, Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum DemuxMode {
     #[default]
     SingleChannel = 0,
@@ -670,7 +670,7 @@ pub enum DemuxMode {
     QuadChannel = 2,
 }
 
-#[derive(PackedStruct, Default, Debug, PartialEq)]
+#[derive(PackedStruct, Default, Debug, PartialEq, Eq)]
 #[packed_struct(bit_numbering = "msb0")]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Bitslip {
