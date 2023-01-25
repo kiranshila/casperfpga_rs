@@ -6,27 +6,14 @@ pub mod hmcad1511;
 pub mod lmx;
 
 use self::{
-    clockswitch::{
-        ClockSwitch,
-        Source,
-    },
-    controller::{
-        Adc16,
-        ChannelInput,
-        ChipSelect,
-    },
-    hmcad1511::{
-        LvdsDriveStrength,
-        LvdsTermination,
-    },
+    clockswitch::{ClockSwitch, Source},
+    controller::{Adc16, ChannelInput, ChipSelect},
+    hmcad1511::{LvdsDriveStrength, LvdsTermination},
     lmx::Synth,
 };
 use crate::transport::Transport;
 use anyhow::bail;
-use std::sync::{
-    Mutex,
-    Weak,
-};
+use std::sync::{Mutex, Weak};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 /// Valid modes for each HMCAD1511 ADC
@@ -64,9 +51,9 @@ impl<T> SnapAdc<T>
 where
     T: Transport,
 {
-    const RAM0_NAME: &str = "adc16_wb_ram0";
-    const RAM1_NAME: &str = "adc16_wb_ram1";
-    const RAM2_NAME: &str = "adc16_wb_ram2";
+    const RAM0_NAME: &'static str = "adc16_wb_ram0";
+    const RAM1_NAME: &'static str = "adc16_wb_ram1";
+    const RAM2_NAME: &'static str = "adc16_wb_ram2";
 
     /// Builds a [`SnapAdc`] from FPG description strings
     /// # Errors
