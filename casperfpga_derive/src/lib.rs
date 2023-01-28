@@ -105,11 +105,30 @@ fn disambiguate_sw_reg(dev: &Device) -> proc_macro2::TokenStream {
     }
 }
 
+fn disambiguate_snapshot(dev: &Device) -> proc_macro2::TokenStream {
+    let width: u32 = dev
+        .metadata
+        .get("data_width")
+        .expect("Malformed FPG metadata")
+        .parse()
+        .expect("Snapshot datawidth wasn't a number?");
+    let ty = match width {
+        8 => quote!(u8),
+        16 => quote!(u16),
+        32 => quote!(u32),
+        64 => quote!(u64),
+        128 => quote!(u128),
+        _ => panic!("Invalid data_width"),
+    };
+    quote!(casperfpga::yellow_blocks::snapshot::Snapshot::<T, #ty>)
+}
+
 fn kind_to_type(dev: &Device) -> Option<proc_macro2::TokenStream> {
     match dev.kind.as_str() {
         "xps:sw_reg" => Some(disambiguate_sw_reg(dev)),
         "xps:ten_gbe" => Some(quote!(casperfpga::yellow_blocks::ten_gbe::TenGbE::<T>)),
         "xps:snap_adc" => Some(quote!(casperfpga::yellow_blocks::snapadc::SnapAdc::<T>)),
+        "casper:snapshot" => Some(disambiguate_snapshot(dev)),
         // Ignore the types that don't have mappings to yellow block implementations
         _ => None,
     }
@@ -147,6 +166,7 @@ fn dev_to_constructor(
                 _ => unreachable!(),
             },
             "xps:ten_gbe" => from_fpg!(),
+            "casper:snapshot" => from_fpg!(nsamples, offset),
             "xps:snap_adc" => {
                 let snap = devices
                     .get("SNAP")

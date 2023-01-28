@@ -4,16 +4,10 @@
 use casper_utils::design_sources::fpg::read_fpg_file;
 use casperfpga::{
     transport::{
-        tapcp::{
-            Platform,
-            Tapcp,
-        },
+        tapcp::{Platform, Tapcp},
         Transport,
     },
-    yellow_blocks::snapadc::{
-        controller::ChannelInput,
-        hmcad1511::InputSelect,
-    },
+    yellow_blocks::snapadc::{controller::ChannelInput, hmcad1511::InputSelect},
 };
 use casperfpga_derive::fpga_from_fpg;
 use fixed::types::U32F0;

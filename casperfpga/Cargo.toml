@@ -12,6 +12,7 @@ kstring = "2"
 fixed = "1"
 typenum = "1"
 indicatif = "0.17"
+num-traits = "0.2"
 
 [lib]
 name = "casperfpga"
