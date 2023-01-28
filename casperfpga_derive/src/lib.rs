@@ -1,27 +1,14 @@
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 
-use casper_utils::design_sources::{
-    fpg::read_fpg_file,
-    Device,
-};
+use casper_utils::design_sources::{fpg::read_fpg_file, Device};
 use kstring::KString;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 use syn::{
-    parse::{
-        Parse,
-        ParseStream,
-    },
-    parse_macro_input,
-    DeriveInput,
-    Ident,
-    LitStr,
-    Token,
+    parse::{Parse, ParseStream},
+    parse_macro_input, DeriveInput, Ident, LitStr, Token,
 };
 
 #[proc_macro_derive(CasperSerde)]
@@ -208,7 +195,7 @@ fn generate_struct_fields(devices: &HashMap<KString, Device>) -> Vec<proc_macro2
                     panic!("FPGA register name `{name}` is not a valid rust identifier")
                 });
                 quote! {
-                    #ident: #ty
+                    pub #ident: #ty
                 }
             })
         })
@@ -251,8 +238,8 @@ pub fn fpga_from_fpg(tokens: TokenStream) -> TokenStream {
     // For every device in the fpg file, create a typed entry in the struct
     let generated = quote! {
         #[derive(Debug)]
-        struct #name<T> {
-            transport: std::sync::Arc<std::sync::Mutex<T>>,
+        pub struct #name<T> {
+            pub transport: std::sync::Arc<std::sync::Mutex<T>>,
             #(#struct_fields),*
         }
 
