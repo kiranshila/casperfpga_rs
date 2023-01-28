@@ -37,3 +37,6 @@ python = ["pyo3"]
 version = "0.17"
 features = ["extension-module", "anyhow"]
 optional = true
+
+[dev-dependencies]
+hdrhistogram = "7"
