@@ -1,27 +1,13 @@
 //! Routines for interacting with the CASPER 10GbE Core
 use crate::{
-    transport::{
-        Deserialize,
-        Serialize,
-        Transport,
-    },
+    transport::{Deserialize, Serialize, Transport},
     yellow_blocks::Address,
 };
-use casperfpga_derive::{
-    address,
-    CasperSerde,
-};
-use packed_struct::{
-    prelude::*,
-    PackedStruct,
-    PackingResult,
-};
+use casperfpga_derive::{address, CasperSerde};
+use packed_struct::{prelude::*, PackedStruct, PackingResult};
 use std::{
     net::Ipv4Addr,
-    sync::{
-        Mutex,
-        Weak,
-    },
+    sync::{Mutex, Weak},
 };
 
 // The details of the memory map here are magical and come from Jack H

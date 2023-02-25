@@ -63,6 +63,8 @@ pub fn address(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(generated)
 }
 
+// fpg_to_fpga parsing
+
 struct FpgFpga {
     name: Ident,
     filename: LitStr,

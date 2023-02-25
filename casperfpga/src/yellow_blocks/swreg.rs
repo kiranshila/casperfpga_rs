@@ -120,13 +120,13 @@ where
     /// Returns an error on bad transport
     /// # Panics
     /// Panics if the width of the register is more than 32 bits (it should never be)
-    pub fn write(&self, val: &F) -> anyhow::Result<()> {
+    pub fn write(&self, val: F) -> anyhow::Result<()> {
         // Check direction
         if self.direction == Direction::ToProcessor {
             bail!("This software register is read-only");
         }
         // Check width
-        if val > &(2_usize.pow(self.width.try_into().unwrap()) - 1 / 2_usize.pow(F::FRAC_NBITS)) {
+        if val > (2_usize.pow(self.width.try_into().unwrap()) - 1 / 2_usize.pow(F::FRAC_NBITS)) {
             bail!("Source value too large for register size");
         }
         let tarc = self.transport.upgrade().unwrap();
@@ -220,7 +220,7 @@ mod tests {
             32,
         );
         let test_num = U27F5::from_num(2.75);
-        my_reg.write(&test_num).unwrap();
+        my_reg.write(test_num).unwrap();
         assert_eq!(test_num, my_reg.read().unwrap());
     }
 
@@ -238,7 +238,7 @@ mod tests {
             32,
         );
         let test_num = I25F7::from_num(3.15625);
-        my_reg.write(&test_num).unwrap();
+        my_reg.write(test_num).unwrap();
         assert_eq!(test_num, my_reg.read().unwrap());
     }
 

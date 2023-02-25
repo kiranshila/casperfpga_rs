@@ -1,14 +1,8 @@
 //! Mock transport implementations used in testing the interface
 
 use super::Transport;
-use crate::core::{
-    Register,
-    RegisterMap,
-};
-use anyhow::{
-    anyhow,
-    bail,
-};
+use crate::core::{Register, RegisterMap};
+use anyhow::{anyhow, bail};
 use casper_utils::design_sources::FpgaDesign;
 use std::collections::HashMap;
 
@@ -75,7 +69,7 @@ impl Transport for Mock {
             .get(device)
             .ok_or_else(|| anyhow!("Device not found"))?;
         if dev.length - offset < data.len() {
-            bail!("Attempting to write to a nonexisten address");
+            bail!("Attempting to write to a nonexistent address");
         }
         for (i, byte) in data.iter().enumerate() {
             self.memory.insert(dev.addr + i + offset, *byte);

@@ -1,17 +1,10 @@
 //! In this example, we will connect to a SNAP over TAPCP, program a file, calibrate the ADCs, and
 //! setup the 10 GbE core.
 
-use casper_utils::design_sources::fpg::read_fpg_file;
-use casperfpga::{
-    transport::{
-        tapcp::{Platform, Tapcp},
-        Transport,
-    },
-    yellow_blocks::snapadc::{controller::ChannelInput, hmcad1511::InputSelect},
-};
-use casperfpga_derive::fpga_from_fpg;
-use fixed::types::U32F0;
+use casperfpga::prelude::*;
+use snapadc::{controller::ChannelInput, hmcad1511::InputSelect};
 use std::net::Ipv4Addr;
+
 fpga_from_fpg!(
     GrexFpga,
     "/home/kiran/Projects/Rust/casperfpga/casperfpga/examples/grex_gateware.fpg"
@@ -19,7 +12,10 @@ fpga_from_fpg!(
 
 fn main() -> anyhow::Result<()> {
     // Create the transport and connect
-    let mut fpga = GrexFpga::new(Tapcp::connect("192.168.0.3:69".parse()?, Platform::SNAP)?)?;
+    let mut fpga = GrexFpga::new(Tapcp::connect(
+        "192.168.0.3:69".parse()?,
+        tapcp::Platform::SNAP,
+    )?)?;
 
     // Program the design
     let design = read_fpg_file(
@@ -53,8 +49,8 @@ fn main() -> anyhow::Result<()> {
     fpga.gbe1.toggle_reset()?;
 
     // Set destination registers
-    fpga.dest_port.write(&U32F0::from_num(dest_port))?;
-    fpga.dest_ip.write(&U32F0::from_num(u32::from(dest_ip)))?;
+    fpga.dest_port.write(dest_port.into())?;
+    fpga.dest_ip.write(u32::from(dest_ip).into())?;
     fpga.gbe1.set_single_arp_entry(dest_ip, &dest_mac)?;
 
     // Turn on the core
