@@ -3,12 +3,11 @@
 
 mod fpg;
 
-use std::path::PathBuf;
-
 use casper_utils::design_sources::fpg::read_fpg_file;
 use fpg::*;
 use proc_macro::TokenStream;
 use quote::quote;
+use std::path::PathBuf;
 use syn::{
     parse_macro_input,
     DeriveInput,
