@@ -14,9 +14,15 @@ A Rust library for interfacing with CASPER Collaboration FPGA devices. Unlike th
 - Type-checked constructors based on device information (FPG file)
 - Generic fall back interfaces
 
-## Python Integration
+## Future Work
 
-We use [py03](https://github.com/PyO3/pyo3) to create a python wrapper to act as a multipurpose rewrite of the python version. This won't be as typesafe (of course), but should act as a more stable and tested stand-in for the previous python version.
+### Device Tree
+
+Currently, `.fpg` files are the source of automatically generating typesafe interfaces for a given design. If CASPER adopts device tree, we'd want to write a parser that performs the same translation.
+
+### Python Integration
+
+We started working on a python wrapper utilizing [py03](https://github.com/PyO3/pyo3) to act as a multipurpose rewrite of the python version. This won't be as typesafe (of course), but should act as a more stable and tested stand-in for the previous python version.
 
 ## Contributing
 
