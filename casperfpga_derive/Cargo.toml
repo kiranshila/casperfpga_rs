@@ -2,6 +2,13 @@
 name = "casperfpga_derive"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/kiranshila/casperfpga_rs"
+description = "Procedural macros for the casperfpga rust library"
+homepage = "https://github.com/kiranshila/casperfpga_rs"
+readme = "../README.md"
+keywords = ["astronomy", "fpga"]
+categories = ["hardware-support"]
 
 [dependencies]
 syn = { version = "1", features = ["full", "extra-traits"] }

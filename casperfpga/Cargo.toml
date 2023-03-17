@@ -2,6 +2,13 @@
 name = "casperfpga"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/kiranshila/casperfpga_rs"
+description = "A library for monitor and control of CASPER FPGA deivces"
+homepage = "https://github.com/kiranshila/casperfpga_rs"
+readme = "../README.md"
+keywords = ["astronomy", "fpga"]
+categories = ["hardware-support"]
 
 [dependencies]
 thiserror = "1"
