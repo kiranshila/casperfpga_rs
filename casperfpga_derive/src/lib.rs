@@ -4,7 +4,7 @@
 mod fpg;
 
 use casper_utils::design_sources::fpg::read_fpg_file;
-use fpg::*;
+use fpg::{FpgFpga, generate_constructors, generate_field_names, generate_struct_fields};
 use proc_macro::TokenStream;
 use quote::quote;
 use std::path::PathBuf;
