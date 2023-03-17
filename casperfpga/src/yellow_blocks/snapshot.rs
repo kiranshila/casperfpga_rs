@@ -1,13 +1,21 @@
 //! TODO - support bitsnap
 
-use crate::transport::{Deserialize, Serialize, Transport};
+use crate::transport::{
+    Deserialize,
+    Serialize,
+    Transport,
+};
 use anyhow::bail;
 use casperfpga_derive::CasperSerde;
 use num_traits::Unsigned;
 use packed_struct::prelude::*;
 use std::{
     marker::PhantomData,
-    sync::{Arc, Mutex, Weak},
+    sync::{
+        Arc,
+        Mutex,
+        Weak,
+    },
 };
 /// The snapshot yellow block to capture a chunk of samples
 #[derive(Debug)]
