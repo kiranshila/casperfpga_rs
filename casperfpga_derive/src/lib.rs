@@ -4,14 +4,11 @@
 mod fpg;
 
 use casper_utils::design_sources::fpg::read_fpg_file;
-use fpg::{FpgFpga, generate_constructors, generate_field_names, generate_struct_fields};
+use fpg::{generate_constructors, generate_field_names, generate_struct_fields, FpgFpga};
 use proc_macro::TokenStream;
 use quote::quote;
 use std::path::PathBuf;
-use syn::{
-    parse_macro_input,
-    DeriveInput,
-};
+use syn::{parse_macro_input, DeriveInput};
 
 #[proc_macro_derive(CasperSerde)]
 /// Derived on a [`PackedStruct`] to shim in our serde methods on packed structs
@@ -44,6 +41,7 @@ pub fn derive_casper_serde(tokens: TokenStream) -> TokenStream {
 /// # Panics
 /// Panics on bad address literals
 #[allow(clippy::manual_flatten)]
+#[allow(clippy::manual_let_else)]
 pub fn address(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr = match syn::parse::<syn::Lit>(attr).expect("Error parsing attribute") {
         syn::Lit::Int(v) => v,
