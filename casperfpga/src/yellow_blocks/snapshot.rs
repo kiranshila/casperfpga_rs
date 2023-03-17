@@ -1,21 +1,13 @@
 //! TODO - support bitsnap
 
-use crate::transport::{
-    Deserialize,
-    Serialize,
-    Transport,
-};
+use crate::transport::{Deserialize, Serialize, Transport};
 use anyhow::bail;
 use casperfpga_derive::CasperSerde;
 use num_traits::Unsigned;
 use packed_struct::prelude::*;
 use std::{
     marker::PhantomData,
-    sync::{
-        Arc,
-        Mutex,
-        Weak,
-    },
+    sync::{Arc, Mutex, Weak},
 };
 /// The snapshot yellow block to capture a chunk of samples
 #[derive(Debug)]
@@ -118,7 +110,8 @@ where
 
     /// Read the data from the snapshot block.
     /// This will not check if we captured a full block and will return an error if it's not "done"
-    /// as indicated by the status register. # Errors
+    /// as indicated by the status register.
+    /// # Errors
     /// Returns an error on transport errors
     #[allow(clippy::missing_panics_doc)]
     pub fn read(&self) -> anyhow::Result<Vec<u8>> {
