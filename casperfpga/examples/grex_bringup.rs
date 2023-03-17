@@ -2,13 +2,10 @@
 //! setup the 10 GbE core.
 
 use casperfpga::prelude::*;
-use snapadc::{
-    controller::ChannelInput,
-    hmcad1511::InputSelect,
-};
+use snapadc::{controller::ChannelInput, hmcad1511::InputSelect};
 use std::net::Ipv4Addr;
 
-fpga_from_fpg!(GrexFpga, "grex_gateware.fpg");
+fpga_from_fpg!(GrexFpga, "examples/grex_gateware.fpg");
 
 fn main() -> anyhow::Result<()> {
     // Create the transport and connect
@@ -18,7 +15,7 @@ fn main() -> anyhow::Result<()> {
     )?)?;
 
     // Program the design
-    let design = read_fpg_file("grex_gateware.fpg")?;
+    let design = read_fpg_file("examples/grex_gateware.fpg")?;
     fpga.transport.lock().unwrap().program(&design, true)?;
 
     // Setup the ADCs
