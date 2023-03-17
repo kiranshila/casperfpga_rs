@@ -2,7 +2,10 @@
 //! setup the 10 GbE core.
 
 use casperfpga::prelude::*;
-use snapadc::{controller::ChannelInput, hmcad1511::InputSelect};
+use snapadc::{
+    controller::ChannelInput,
+    hmcad1511::InputSelect,
+};
 use std::net::Ipv4Addr;
 
 fpga_from_fpg!(GrexFpga, "casperfpga/examples/grex_gateware.fpg");

@@ -1,14 +1,20 @@
 //! The casperfpga transport implementations for TAPCP
 
 use super::Transport;
-use crate::core::{Register, RegisterMap};
+use crate::core::{
+    Register,
+    RegisterMap,
+};
 use anyhow::bail;
 use casper_utils::design_sources::FpgaDesign;
 use indicatif::ProgressBar;
 use kstring::KString;
 use std::{
     collections::HashMap,
-    net::{SocketAddr, UdpSocket},
+    net::{
+        SocketAddr,
+        UdpSocket,
+    },
     time::Duration,
 };
 
@@ -258,7 +264,11 @@ pub(crate) mod python {
     use crate::transport::Transport;
     use anyhow::anyhow;
     use casper_utils::design_sources::fpg;
-    use pyo3::{conversion::ToPyObject, prelude::*, types::PyBytes};
+    use pyo3::{
+        conversion::ToPyObject,
+        prelude::*,
+        types::PyBytes,
+    };
     pub(crate) fn add_tapcp(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         /// Transport via TAPCP - connects on construction.
         /// Requires a platform string, either "SNAP" or "SNAP2".

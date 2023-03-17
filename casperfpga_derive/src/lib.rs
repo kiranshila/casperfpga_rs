@@ -4,11 +4,19 @@
 mod fpg;
 
 use casper_utils::design_sources::fpg::read_fpg_file;
-use fpg::{generate_constructors, generate_field_names, generate_struct_fields, FpgFpga};
+use fpg::{
+    generate_constructors,
+    generate_field_names,
+    generate_struct_fields,
+    FpgFpga,
+};
 use proc_macro::TokenStream;
 use quote::quote;
 use std::path::PathBuf;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{
+    parse_macro_input,
+    DeriveInput,
+};
 
 #[proc_macro_derive(CasperSerde)]
 /// Derived on a [`PackedStruct`] to shim in our serde methods on packed structs

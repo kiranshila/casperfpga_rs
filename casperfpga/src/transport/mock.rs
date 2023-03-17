@@ -1,8 +1,14 @@
 //! Mock transport implementations used in testing the interface
 
 use super::Transport;
-use crate::core::{Register, RegisterMap};
-use anyhow::{anyhow, bail};
+use crate::core::{
+    Register,
+    RegisterMap,
+};
+use anyhow::{
+    anyhow,
+    bail,
+};
 use casper_utils::design_sources::FpgaDesign;
 use std::collections::HashMap;
 
