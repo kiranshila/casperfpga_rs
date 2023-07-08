@@ -13,6 +13,7 @@
 //! &Arc<Mutex<T:Transport>>, reg_name: &str, ..<metadata>)`, where the constructor implicitly calls
 //! `Arc::downgrade`.
 
+pub mod bram;
 pub mod snapadc;
 pub mod snapshot;
 pub mod swreg;

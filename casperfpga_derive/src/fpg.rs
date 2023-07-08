@@ -28,7 +28,7 @@ impl Parse for FpgFpga {
     }
 }
 
-fn fixed_type(dev: &Device) -> proc_macro2::TokenStream {
+fn swreg_fixed_type(dev: &Device) -> proc_macro2::TokenStream {
     let bin_pts: u32 = dev
         .metadata
         .get("bin_pts")
@@ -48,7 +48,7 @@ fn disambiguate_sw_reg(dev: &Device) -> proc_macro2::TokenStream {
     // additional metadata to know what rust types they become
     match dev.metadata.get("arith_types").unwrap().as_str() {
         "0" | "1" => {
-            let fixed_ty = fixed_type(dev);
+            let fixed_ty = swreg_fixed_type(dev);
             quote!(casperfpga::yellow_blocks::swreg::FixedSoftwareRegister::<T, #fixed_ty>)
         }
         "2" => quote!(casperfpga::yellow_blocks::swreg::BooleanSoftwareRegister::<T>),
@@ -74,12 +74,43 @@ fn disambiguate_snapshot(dev: &Device) -> proc_macro2::TokenStream {
     quote!(casperfpga::yellow_blocks::snapshot::Snapshot::<T, #ty>)
 }
 
+// This is obnoxiously slightly different from swreg
+fn disambiguate_bram(dev: &Device) -> proc_macro2::TokenStream {
+    let bin_pts: u32 = dev
+        .metadata
+        .get("data_bin_pt")
+        .expect("Malformed FPG metadata")
+        .parse()
+        .expect("Binary point wasn't a number");
+    let arith_type_str = match dev.metadata.get("arith_type").unwrap().as_str() {
+        "Unsigned" => "U",
+        "Signed" => "I",
+        _ => unreachable!(),
+    };
+    let width: u32 = dev
+        .metadata
+        .get("data_width")
+        .expect("Malformed FPG metadata")
+        .parse()
+        .expect("Bram datawidth wasn't a number?");
+    let width_str = match width {
+        8 | 16 | 32 | 64 | 128 => width.to_string(),
+        _ => panic!("Invalid data_width"),
+    };
+    let fixed_ident =
+        syn::parse_str::<Ident>(&format!("Fixed{arith_type_str}{width_str}")).unwrap();
+    let frac_ident = syn::parse_str::<Ident>(&format!("U{bin_pts}")).unwrap();
+    let fixed_type = quote! {fixed::#fixed_ident::<fixed::types::extra::#frac_ident>};
+    quote!(casperfpga::yellow_blocks::bram::Bram::<T, #fixed_type>)
+}
+
 fn kind_to_type(dev: &Device) -> Option<proc_macro2::TokenStream> {
     match dev.kind.as_str() {
         "xps:sw_reg" => Some(disambiguate_sw_reg(dev)),
         "xps:ten_gbe" => Some(quote!(casperfpga::yellow_blocks::ten_gbe::TenGbE::<T>)),
         "xps:snap_adc" => Some(quote!(casperfpga::yellow_blocks::snapadc::SnapAdc::<T>)),
         "casper:snapshot" => Some(disambiguate_snapshot(dev)),
+        "xps:bram" => Some(disambiguate_bram(dev)),
         // Ignore the types that don't have mappings to yellow block implementations
         _ => None,
     }
@@ -148,6 +179,7 @@ fn dev_to_constructor(
                     let #ident = #ty::from_fpg(tweak.clone(), #name, #adc_resolution, #sample_rate, #snap_inputs, #src)?;
                 })
             }
+            "xps:bram" => from_fpg!(addr_width),
             // Ignore the types that don't have mappings to yellow block implementations
             _ => None,
         }

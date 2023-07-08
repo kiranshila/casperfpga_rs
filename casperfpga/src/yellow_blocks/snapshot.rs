@@ -1,4 +1,4 @@
-//! TODO - support bitsnap
+//! TODO - support bitsnap, integrate with bram lib
 
 use crate::transport::{
     Deserialize,

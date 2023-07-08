@@ -34,9 +34,9 @@ fn main() -> anyhow::Result<()> {
     // Disable
     fpga.tx_en.write(false)?;
     // Reset
-    fpga.tx_rst.write(false)?;
-    fpga.tx_rst.write(true)?;
-    fpga.tx_rst.write(false)?;
+    fpga.master_rst.write(false)?;
+    fpga.master_rst.write(true)?;
+    fpga.master_rst.write(false)?;
 
     fpga.gbe1.set_ip("192.168.0.20".parse()?)?;
     fpga.gbe1.set_gateway(dest_ip)?;
