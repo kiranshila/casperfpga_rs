@@ -18,8 +18,8 @@ use std::{
     time::Duration,
 };
 
-const DEFAULT_TIMEOUT: f32 = 0.1;
-const DEFAULT_RETRIES: usize = 7; // up to 1.7s
+const DEFAULT_TIMEOUT: f32 = 0.5;
+const DEFAULT_RETRIES: usize = 20;
 
 /// Platforms that support TAPCP
 #[derive(Debug, Copy, Clone)]
