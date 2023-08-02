@@ -12,11 +12,11 @@ categories = ["hardware-support"]
 
 [dependencies]
 anyhow = "1"
-async-tftp = "0.3"
 num-derive = "0.3"
 num-traits = "0.2"
 thiserror = "1"
 kstring = "2"
+tftp_client = { git = "https://github.com/kiranshila/tftp_client" }
 
 [build-dependencies]
 bindgen = "0.61"

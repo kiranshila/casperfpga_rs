@@ -80,10 +80,10 @@ impl Transport for Tapcp {
             // In the case we get back a file not found error,
             // that implies the device is not running a user program.
             // Any other error is actually an error
-            Err(e1) => match e1.downcast_ref::<tapcp::tftp::Error>() {
+            Err(e1) => match e1.downcast_ref::<tftp_client::Error>() {
                 Some(e2) => match e2 {
-                    tapcp::tftp::Error::ErrorResponse(code, _) => match code {
-                        tapcp::tftp::ErrorCode::NotFound => Ok(false),
+                    tftp_client::Error::Protocol { code, msg } => match code {
+                        tftp_client::parser::ErrorCode::NoFile => Ok(false),
                         _ => bail!(e1),
                     },
                     _ => bail!(e1),
