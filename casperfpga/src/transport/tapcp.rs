@@ -186,8 +186,6 @@ impl Transport for Tapcp {
             },
             &mut self.socket,
         )?;
-        // Then wait as the FPGA takes a while to reboot
-        std::thread::sleep(Duration::from_secs(1));
         Ok(())
     }
 

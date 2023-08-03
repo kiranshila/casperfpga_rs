@@ -187,6 +187,8 @@ pub fn progdev(addr: u32, socket: &mut UdpSocket) -> anyhow::Result<()> {
     ) {
         Ok(_) | Err(_) => (),
     }
+    // Then wait as the FPGA takes a while to reboot
+    std::thread::sleep(Duration::from_secs(10));
     Ok(())
 }
 
