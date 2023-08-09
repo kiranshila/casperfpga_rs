@@ -16,6 +16,7 @@ use tftp_client::{
     upload,
 };
 use thiserror::Error;
+use tracing::debug;
 
 pub const FLASH_SECTOR_SIZE: u32 = 0x10000;
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(500);
@@ -46,18 +47,18 @@ fn retrying_download(
     let mut local_retries = 0;
     loop {
         if local_retries == retries {
-            return Err(tftp_client::Error::Timeout);
+            return Err(Error::Tftp(tftp_client::Error::Timeout));
         }
         let res = download(filename, socket, timeout, max_timeout, retries);
         match res {
             Ok(v) => return Ok(v),
             Err(tftp_client::Error::Protocol { code, msg }) => {
-                debug!("Protocol error: {code} {msg}");
+                debug!("Protocol error: {:?} {msg}", code);
                 local_retries += 1;
                 continue;
             }
             Err(e) => {
-                return Err(e);
+                return Err(Error::Tftp(e));
             }
         }
     }
@@ -70,22 +71,22 @@ fn retrying_upload(
     timeout: Duration,
     max_timeout: Duration,
     retries: usize,
-) -> Result<Vec<u8>, Error> {
+) -> Result<(), Error> {
     let mut local_retries = 0;
     loop {
         if local_retries == retries {
-            return Err(tftp_client::Error::Timeout);
+            return Err(Error::Tftp(tftp_client::Error::Timeout));
         }
         let res = upload(filename, data, socket, timeout, max_timeout, retries);
         match res {
-            Ok(v) => return Ok(v),
+            Ok(_) => return Ok(()),
             Err(tftp_client::Error::Protocol { code, msg }) => {
-                debug!("Protocol error: {code} {msg}");
+                debug!("Protocol error: {:?} {msg}", code);
                 local_retries += 1;
                 continue;
             }
             Err(e) => {
-                return Err(e);
+                return Err(Error::Tftp(e));
             }
         }
     }
@@ -199,14 +200,14 @@ pub fn write_device(
     // spec as - `/dev/DEV_NAME[.WORD_OFFSET]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/dev/{device}.{offset:x}");
     // Then do it
-    Ok(retrying_upload(
+    retrying_upload(
         &filename,
         data,
         socket,
         DEFAULT_TIMEOUT,
         MAX_TIMEOUT,
         retries,
-    )?)
+    )
 }
 
 /// Read memory from the onboard flash
@@ -236,14 +237,14 @@ pub fn write_flash(
     retries: usize,
 ) -> Result<(), Error> {
     let filename = format!("/flash.{offset:x}");
-    Ok(retrying_upload(
+    retrying_upload(
         &filename,
         data,
         socket,
         DEFAULT_TIMEOUT,
         MAX_TIMEOUT,
         retries,
-    )?)
+    )
 }
 
 /// Reboot the FPGA from the bitstream program at the 32-bit address `addr`.
