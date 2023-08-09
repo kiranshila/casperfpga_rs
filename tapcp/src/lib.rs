@@ -33,13 +33,71 @@ pub enum Error {
     MissingMetadata,
 }
 
+// The FPGA handles errors poorly, so when we try to move to quick (esp with sequential commands),
+// we want to retry. We'll create wrappers around the tftp functions to retry on procotol errors,
+// but bail on all others
+fn retrying_download(
+    filename: &str,
+    socket: &mut UdpSocket,
+    timeout: Duration,
+    max_timeout: Duration,
+    retries: usize,
+) -> Result<Vec<u8>, Error> {
+    let mut local_retries = 0;
+    loop {
+        if local_retries == retries {
+            return Err(tftp_client::Error::Timeout);
+        }
+        let res = download(filename, socket, timeout, max_timeout, retries);
+        match res {
+            Ok(v) => return Ok(v),
+            Err(tftp_client::Error::Protocol { code, msg }) => {
+                debug!("Protocol error: {code} {msg}");
+                local_retries += 1;
+                continue;
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+}
+
+fn retrying_upload(
+    filename: &str,
+    data: &[u8],
+    socket: &mut UdpSocket,
+    timeout: Duration,
+    max_timeout: Duration,
+    retries: usize,
+) -> Result<Vec<u8>, Error> {
+    let mut local_retries = 0;
+    loop {
+        if local_retries == retries {
+            return Err(tftp_client::Error::Timeout);
+        }
+        let res = upload(filename, data, socket, timeout, max_timeout, retries);
+        match res {
+            Ok(v) => return Ok(v),
+            Err(tftp_client::Error::Protocol { code, msg }) => {
+                debug!("Protocol error: {code} {msg}");
+                local_retries += 1;
+                continue;
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+}
+
 /// Gets the temperature of the remote device in Celsius
 /// # Errors
 /// Returns an error on TFTP errors
 /// # Panics
 /// Panics if we did not get back enough bytes
 pub fn temp(socket: &mut UdpSocket, retries: usize) -> Result<f32, Error> {
-    let bytes = download("/temp", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
+    let bytes = retrying_download("/temp", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
     Ok(f32::from_be_bytes(
         bytes[..4].try_into().map_err(|_| Error::Incomplete)?,
     ))
@@ -49,7 +107,7 @@ pub fn temp(socket: &mut UdpSocket, retries: usize) -> Result<f32, Error> {
 /// # Errors
 /// Returns an error on TFTP errors
 pub fn help(socket: &mut UdpSocket, retries: usize) -> Result<String, Error> {
-    let bytes = download("/help", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
+    let bytes = retrying_download("/help", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
     Ok(std::str::from_utf8(&bytes)?.to_string())
 }
 
@@ -64,7 +122,7 @@ pub fn listdev(
     // Create the hash map we'll be constructing to hold the device list
     let mut dev_map = HashMap::new();
 
-    let bytes = download("/listdev", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
+    let bytes = retrying_download("/listdev", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
     // Bytes back from this are stored as CSL, so we'll use Dave's C program to uncompress it
     // The CSL lib has internal state for some reason
 
@@ -119,7 +177,7 @@ pub fn read_device(
     // To start the request, we need to form the filename string, defined by the TAPCP
     // spec as - `/dev/DEV_NAME[.WORD_OFFSET[.NWORDS]]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/dev/{device}.{offset:x}.{n:x}");
-    let bytes = download(filename, socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
+    let bytes = retrying_download(&filename, socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
     if n != 0 && bytes.len() != n * 4 {
         Err(Error::Incomplete)
     } else {
@@ -141,8 +199,8 @@ pub fn write_device(
     // spec as - `/dev/DEV_NAME[.WORD_OFFSET]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/dev/{device}.{offset:x}");
     // Then do it
-    Ok(upload(
-        filename,
+    Ok(retrying_upload(
+        &filename,
         data,
         socket,
         DEFAULT_TIMEOUT,
@@ -163,7 +221,7 @@ pub fn read_flash(
 ) -> Result<Vec<u8>, Error> {
     // spec as - `/flash.WORD_OFFSET[.NWORDS]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/flash.{offset:x}.{n:x}");
-    let bytes = download(&filename, socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
+    let bytes = retrying_download(&filename, socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
     Ok(bytes)
 }
 
@@ -178,7 +236,7 @@ pub fn write_flash(
     retries: usize,
 ) -> Result<(), Error> {
     let filename = format!("/flash.{offset:x}");
-    Ok(upload(
+    Ok(retrying_upload(
         &filename,
         data,
         socket,

@@ -16,6 +16,7 @@ num-traits = "0.2"
 thiserror = "1"
 kstring = "2"
 tftp_client = { git = "https://github.com/kiranshila/tftp_client" }
+tracing = "0.1"
 
 [build-dependencies]
 bindgen = "0.66"
