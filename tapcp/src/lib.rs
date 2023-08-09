@@ -17,7 +17,7 @@ use tftp_client::{
 };
 
 pub const FLASH_SECTOR_SIZE: u32 = 0x10000;
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(100);
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(500);
 pub const MAX_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Gets the temperature of the remote device in Celsius
