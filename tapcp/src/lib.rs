@@ -45,6 +45,7 @@ fn retrying_download(
     retries: usize,
 ) -> Result<Vec<u8>, Error> {
     let mut local_retries = 0;
+    let mut this_timeout = timeout;
     loop {
         if local_retries == retries {
             return Err(Error::Tftp(tftp_client::Error::Timeout));
@@ -54,7 +55,12 @@ fn retrying_download(
             Ok(v) => return Ok(v),
             Err(tftp_client::Error::Protocol { code, msg }) => {
                 debug!("Protocol error: {:?} {msg}", code);
+                std::thread::sleep(this_timeout);
                 local_retries += 1;
+                this_timeout += this_timeout / 2;
+                if this_timeout > MAX_TIMEOUT {
+                    this_timeout = MAX_TIMEOUT;
+                }
                 continue;
             }
             Err(e) => {
@@ -73,6 +79,7 @@ fn retrying_upload(
     retries: usize,
 ) -> Result<(), Error> {
     let mut local_retries = 0;
+    let mut this_timeout = timeout;
     loop {
         if local_retries == retries {
             return Err(Error::Tftp(tftp_client::Error::Timeout));
@@ -83,6 +90,12 @@ fn retrying_upload(
             Err(tftp_client::Error::Protocol { code, msg }) => {
                 debug!("Protocol error: {:?} {msg}", code);
                 local_retries += 1;
+                std::thread::sleep(this_timeout);
+                local_retries += 1;
+                this_timeout += this_timeout / 2;
+                if this_timeout > MAX_TIMEOUT {
+                    this_timeout = MAX_TIMEOUT;
+                }
                 continue;
             }
             Err(e) => {
