@@ -8,6 +8,7 @@ use std::{
         SystemTime,
     },
 };
+use thiserror::Error;
 
 /// The representation of an interal register
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -21,11 +22,15 @@ pub struct Register {
 /// The mapping from register names and their data (address and size)
 pub type RegisterMap = HashMap<KString, Register>;
 
+#[derive(Debug, Error)]
+pub enum Error {}
+
 /// Read the `sys_clkcounter` register a few times to estimate the clock rate in megahertz
 /// # Errors
 /// Returns an error on bad transport
 #[allow(clippy::cast_precision_loss)]
-pub fn estimate_fpga_clock<T>(transport: &mut T) -> anyhow::Result<f64>
+#[allow(clippy::missing_panics_doc)]
+pub fn estimate_fpga_clock<T>(transport: &mut T) -> Result<f64, crate::transport::Error>
 where
     T: Transport,
 {
@@ -38,32 +43,9 @@ where
     if first_count > second_count {
         second_count += 2u64.pow(32);
     }
-    let transport_elapsed = later.duration_since(earlier)?;
+    let transport_elapsed = later
+        .duration_since(earlier)
+        .expect("Earlier and later are not properly ordered");
     let transport_delay = transport_elapsed.as_secs_f64();
     Ok((second_count - first_count) as f64 / ((delay_s - transport_delay) * 1_000_000_f64))
-}
-
-#[cfg(feature = "python")]
-mod python {
-    use crate::transport::tapcp::python::add_tapcp;
-    use pyo3::prelude::*;
-
-    #[pymodule]
-    // Build the module hierarchy to match this one
-    fn casperfpga(py: Python<'_>, m: &PyModule) -> PyResult<()> {
-        register_child_modules(py, m)?;
-        Ok(())
-    }
-
-    fn register_child_modules(py: Python<'_>, parent_module: &PyModule) -> PyResult<()> {
-        let transport = PyModule::new(py, "transport")?;
-        let yellow_blocks = PyModule::new(py, "yellow_blocks")?;
-
-        // Add the members of each submodule
-        add_tapcp(py, transport)?;
-
-        parent_module.add_submodule(transport)?;
-        parent_module.add_submodule(yellow_blocks)?;
-        Ok(())
-    }
 }

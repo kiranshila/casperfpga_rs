@@ -3,6 +3,13 @@ use std::sync::{
     Mutex,
     Weak,
 };
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Transport(#[from] crate::transport::Error),
+}
 
 /// Clock source for SNAP ADCs
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -34,12 +41,12 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_source(&self, source: Source) -> anyhow::Result<()> {
+    pub fn set_source(&self, source: Source) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         match source {
-            Source::Internal => transport.write(Self::NAME, 0, &1u32),
-            Source::External => transport.write(Self::NAME, 0, &0u32),
+            Source::Internal => Ok(transport.write(Self::NAME, 0, &1u32)?),
+            Source::External => Ok(transport.write(Self::NAME, 0, &0u32)?),
         }
     }
 
@@ -47,7 +54,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn get_source(&self) -> anyhow::Result<Source> {
+    pub fn get_source(&self) -> Result<Source, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let raw: u32 = transport.read(Self::NAME, 0)?;

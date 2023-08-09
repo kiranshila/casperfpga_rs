@@ -1,6 +1,6 @@
 [package]
 name = "casper_utils"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/kiranshila/casperfpga_rs"
@@ -13,6 +13,6 @@ categories = ["hardware-support", "parser-implementations"]
 [dependencies]
 nom = "7"
 kstring = "2"
-anyhow = "1"
 flate2 = "1"
 md5 = "0.7"
+thiserror = "1"

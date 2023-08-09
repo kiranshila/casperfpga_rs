@@ -23,6 +23,7 @@ use std::{
         Weak,
     },
 };
+use thiserror::Error;
 
 // The details of the memory map here are magical and come from Jack H
 
@@ -157,6 +158,12 @@ pub struct Status {
     pub link_up: bool,
 }
 
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Transport(#[from] crate::transport::Error),
+}
+
 #[derive(Debug)]
 pub struct TenGbE<T> {
     transport: Weak<Mutex<T>>,
@@ -170,7 +177,7 @@ where
     /// Builds a [`TenGbE`] from FPG description strings
     /// # Errors
     /// Returns an error on bad string arguments
-    pub fn from_fpg(transport: Weak<Mutex<T>>, reg_name: &str) -> anyhow::Result<Self> {
+    pub fn from_fpg(transport: Weak<Mutex<T>>, reg_name: &str) -> Result<Self, Error> {
         Ok(Self {
             transport,
             name: reg_name.to_string(),
@@ -181,7 +188,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn get_ip(&self) -> anyhow::Result<Ipv4Addr> {
+    pub fn get_ip(&self) -> Result<Ipv4Addr, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let ip: IpAddress = transport.read_addr(&self.name)?;
@@ -192,17 +199,17 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_ip(&self, addr: Ipv4Addr) -> anyhow::Result<()> {
+    pub fn set_ip(&self, addr: Ipv4Addr) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        transport.write_addr(&self.name, &IpAddress(addr))
+        Ok(transport.write_addr(&self.name, &IpAddress(addr))?)
     }
 
     /// Get the gateway IP of the core
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn get_gateway(&self) -> anyhow::Result<Ipv4Addr> {
+    pub fn get_gateway(&self) -> Result<Ipv4Addr, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let ip: GatewayAddress = transport.read_addr(&self.name)?;
@@ -213,17 +220,17 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_gateway(&self, addr: Ipv4Addr) -> anyhow::Result<()> {
+    pub fn set_gateway(&self, addr: Ipv4Addr) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        transport.write_addr(&self.name, &GatewayAddress(addr))
+        Ok(transport.write_addr(&self.name, &GatewayAddress(addr))?)
     }
 
     /// Get the port of the core
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn get_port(&self) -> anyhow::Result<u16> {
+    pub fn get_port(&self) -> Result<u16, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let port: Port = transport.read_addr(&self.name)?;
@@ -234,23 +241,23 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_port(&self, port: u16) -> anyhow::Result<()> {
+    pub fn set_port(&self, port: u16) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        transport.write_addr(
+        Ok(transport.write_addr(
             &self.name,
             &Port {
                 port_mask: 0xFF,
                 port,
             },
-        )
+        )?)
     }
 
     /// Get the subnet mask of the core
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn get_netmask(&self) -> anyhow::Result<Ipv4Addr> {
+    pub fn get_netmask(&self) -> Result<Ipv4Addr, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let ip: Netmask = transport.read_addr(&self.name)?;
@@ -261,17 +268,17 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_netmask(&self, addr: Ipv4Addr) -> anyhow::Result<()> {
+    pub fn set_netmask(&self, addr: Ipv4Addr) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        transport.write_addr(&self.name, &Netmask(addr))
+        Ok(transport.write_addr(&self.name, &Netmask(addr))?)
     }
 
     /// Get the MAC address of the core
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn get_mac(&self) -> anyhow::Result<[u8; 6]> {
+    pub fn get_mac(&self) -> Result<[u8; 6], Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let mac: MacAddress = transport.read_addr(&self.name)?;
@@ -282,34 +289,34 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_mac(&self, mac: &[u8; 6]) -> anyhow::Result<()> {
+    pub fn set_mac(&self, mac: &[u8; 6]) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        transport.write_addr(&self.name, &MacAddress(*mac))
+        Ok(transport.write_addr(&self.name, &MacAddress(*mac))?)
     }
 
     /// Enable or disable the core fabric
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_enable(&self, enabled: bool) -> anyhow::Result<()> {
+    pub fn set_enable(&self, enabled: bool) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        transport.write_addr(
+        Ok(transport.write_addr(
             &self.name,
             &PromiscRstEn {
                 soft_rst: false,
                 promisc: false,
                 enable: enabled,
             },
-        )
+        )?)
     }
 
     /// Toggle the software reset of the core
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn toggle_reset(&self) -> anyhow::Result<()> {
+    pub fn toggle_reset(&self) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let mut pre: PromiscRstEn = transport.read_addr(&self.name)?;
@@ -326,7 +333,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_single_arp_entry(&self, ip: Ipv4Addr, mac: &[u8; 6]) -> anyhow::Result<()> {
+    pub fn set_single_arp_entry(&self, ip: Ipv4Addr, mac: &[u8; 6]) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // ARP entries start at 0x1000 and are laid out like MacAddress

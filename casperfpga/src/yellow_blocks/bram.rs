@@ -1,5 +1,4 @@
 use crate::transport::Transport;
-use anyhow::bail;
 use fixed::traits::Fixed;
 use std::{
     marker::PhantomData,
@@ -9,6 +8,19 @@ use std::{
         Weak,
     },
 };
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Transport(#[from] crate::transport::Error),
+    #[error("Out of bounds addressing")]
+    OutOfBounds,
+    #[error("Size of given data doesn't fit the target")]
+    BadSize,
+    #[error("Failed to parse addr_width from the fpg file")]
+    BadAddrWidth,
+}
 
 /// The snapshot yellow block to capture a chunk of samples
 #[derive(Debug)]
@@ -46,12 +58,15 @@ where
         transport: Weak<Mutex<T>>,
         reg_name: &str,
         addr_width: &str,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, Error> {
         Ok(Self {
             transport,
             name: reg_name.to_string(),
             phantom: PhantomData,
-            size: 1 << addr_width.parse::<usize>()?,
+            size: 1
+                << addr_width
+                    .parse::<usize>()
+                    .map_err(|_| Error::BadAddrWidth)?,
         })
     }
 }
@@ -65,9 +80,9 @@ where
     /// # Errors
     /// Returns an error on transport errors
     #[allow(clippy::missing_panics_doc)]
-    pub fn read_addr(&self, addr: usize) -> anyhow::Result<F> {
+    pub fn read_addr(&self, addr: usize) -> Result<F, Error> {
         if addr >= self.size {
-            bail!("Address out of bounds");
+            return Err(Error::OutOfBounds);
         }
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -78,7 +93,7 @@ where
     /// # Errors
     /// Returns an error on transport errors
     #[allow(clippy::missing_panics_doc)]
-    pub fn read(&self) -> anyhow::Result<Vec<F>> {
+    pub fn read(&self) -> Result<Vec<F>, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Read all the data
@@ -94,7 +109,7 @@ where
     /// # Errors
     /// Returns an error on transport errors or if the data is not the correct size
     #[allow(clippy::missing_panics_doc)]
-    pub fn write(&self, data: &[F]) -> anyhow::Result<()> {
+    pub fn write(&self, data: &[F]) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Transform the vec of fixed point words to the vec of bytes
@@ -104,7 +119,7 @@ where
             .flat_map(|f| f.to_be_bytes().to_vec())
             .collect::<Vec<_>>();
         if v.len() != total_bytes {
-            bail!("Data is not the correct size");
+            return Err(Error::BadSize);
         }
         // Write all the data
         transport.write_bytes(&self.name, 0, &v)?;
@@ -115,10 +130,10 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn write_addr(&self, addr: usize, val: F) -> anyhow::Result<()> {
+    pub fn write_addr(&self, addr: usize, val: F) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Perform the write
-        transport.write(&self.name, addr, &(val.to_be_bytes()))
+        Ok(transport.write(&self.name, addr, &(val.to_be_bytes()))?)
     }
 }

@@ -1,7 +1,10 @@
 //! Utilities for working with files that provide a bitstream
 
 use kstring::KString;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::Write,
+};
 
 pub mod fpg;
 
@@ -42,7 +45,10 @@ pub trait FpgaDesign {
 
     /// Get a string representation of the MD5 hash
     fn md5_string(&self) -> String {
-        self.md5().iter().map(|&v| format!("{v:x}")).collect()
+        self.md5().iter().fold(String::new(), |mut output, v| {
+            let _ = write!(output, "{v:x}");
+            output
+        })
     }
 
     /// Get the list of potentially constructable devices

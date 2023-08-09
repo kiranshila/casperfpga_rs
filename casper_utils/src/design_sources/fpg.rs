@@ -6,7 +6,6 @@ use super::{
     FpgaDesign,
     Register,
 };
-use anyhow::anyhow;
 use flate2::bufread::GzDecoder;
 use kstring::KString;
 use nom::{
@@ -38,6 +37,7 @@ use std::{
     path::Path,
     str::from_utf8,
 };
+use thiserror::Error;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct File {
@@ -45,6 +45,24 @@ pub struct File {
     pub bitstream: Vec<u8>,
     pub md5: [u8; 16],
     pub filename: OsString,
+}
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error("Parsing failed to match the grammar")]
+    ParseMatch,
+}
+
+#[derive(Error, Debug)]
+pub enum ParseError {
+    #[error("Invalid UTF8 while parsing a string")]
+    Utf8(#[from] std::str::Utf8Error),
+    #[error("Invalid integer")]
+    Integer(#[from] std::num::ParseIntError),
 }
 
 impl FpgaDesign for File {
@@ -69,7 +87,7 @@ fn uploadbin(input: &[u8]) -> IResult<&[u8], &[u8]> {
     terminated(tag("?uploadbin"), line_ending)(input)
 }
 
-fn from_hex(input: &[u8]) -> anyhow::Result<u32> {
+fn from_hex(input: &[u8]) -> Result<u32, ParseError> {
     let in_str = from_utf8(input)?;
     let num = u32::from_str_radix(in_str, 16)?;
     Ok(num)
@@ -79,7 +97,7 @@ fn hex_number(input: &[u8]) -> IResult<&[u8], u32> {
     map_res(preceded(tag("0x"), hex_digit1), from_hex)(input)
 }
 
-fn utf8_string(input: &[u8]) -> anyhow::Result<&str> {
+fn utf8_string(input: &[u8]) -> Result<&str, ParseError> {
     let in_str = from_utf8(input)?;
     Ok(in_str)
 }
@@ -158,7 +176,7 @@ pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], AlmostFile> {
 /// # Errors
 /// Returns an error on invalid FPG files
 #[allow(clippy::missing_panics_doc)]
-pub fn read_fpg_file<T>(filename: T) -> anyhow::Result<File>
+pub fn read_fpg_file<T>(filename: T) -> Result<File, Error>
 where
     T: AsRef<Path> + Clone,
 {
@@ -169,8 +187,7 @@ where
     // Calculate the MD5
     let md5 = md5::compute(&contents);
 
-    let (_, (devs, bs)) = fpg_file(&contents)
-        .map_err(|_| anyhow!("Error parsing fpg file, are you sure it's valid?"))?;
+    let (_, (devs, bs)) = fpg_file(&contents).map_err(|_| Error::ParseMatch)?;
     let mut file = File {
         devices: devs,
         bitstream: bs,

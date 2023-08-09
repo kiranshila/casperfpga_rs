@@ -12,6 +12,11 @@
 //! To this end, all yellow block structs follow the constructor convention of `new(transport:
 //! &Arc<Mutex<T:Transport>>, reg_name: &str, ..<metadata>)`, where the constructor implicitly calls
 //! `Arc::downgrade`.
+//!
+//! Additionally, from an error handling perspective, every yellow block will have its own error
+//! type, usually including a thin wrapper around the transport error.
+
+use thiserror::Error;
 
 pub mod bram;
 pub mod snapadc;
@@ -23,4 +28,19 @@ pub mod ten_gbe;
 /// transport read methods
 pub trait Address {
     fn addr() -> u16;
+}
+
+#[derive(Error, Debug)]
+/// Top level error for all yellow blocks (rarely used)
+pub enum Error {
+    #[error(transparent)]
+    Bram(#[from] bram::Error),
+    #[error(transparent)]
+    SnapAdc(#[from] snapadc::Error),
+    #[error(transparent)]
+    Snapshot(#[from] snapshot::Error),
+    #[error(transparent)]
+    Swreg(#[from] swreg::Error),
+    #[error(transparent)]
+    TenGbE(#[from] ten_gbe::Error),
 }

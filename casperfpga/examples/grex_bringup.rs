@@ -1,10 +1,12 @@
 //! In this example, we will connect to a SNAP over TAPCP, program a file, calibrate the ADCs, and
 //! setup the 10 GbE core.
 
-use casperfpga::prelude::*;
-use snapadc::{
-    controller::ChannelInput,
-    hmcad1511::InputSelect,
+use casperfpga::{
+    prelude::*,
+    yellow_blocks::snapadc::{
+        controller::ChannelInput,
+        hmcad1511::InputSelect,
+    },
 };
 use std::net::Ipv4Addr;
 

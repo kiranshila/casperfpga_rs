@@ -7,6 +7,26 @@ use crate::{
     yellow_blocks::Address,
 };
 use casper_utils::design_sources::FpgaDesign;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+/// Transport errors
+pub enum Error {
+    #[error(transparent)]
+    Infallible(#[from] std::convert::Infallible),
+    #[error("Trying to transport through a packed struct yeilded a packing error")]
+    Packing(#[from] packed_struct::PackingError),
+    #[error("The requested device was not found - `{0}`")]
+    DeviceNotFound(String),
+    #[error(transparent)]
+    Mock(#[from] mock::Error),
+    #[error(transparent)]
+    Tapcp(#[from] tapcp::Error),
+}
+
+/// All methods involving transports will have this signature
+#[allow(clippy::module_name_repetitions)]
+pub type TransportResult<T> = Result<T, Error>;
 
 /// Types that implement this trait can be serialized such that they can be written to FPGA software
 /// registers
@@ -19,10 +39,11 @@ pub trait Serialize {
 /// software registers
 pub trait Deserialize: Sized {
     type Chunk;
+    type Error;
     /// Deserializes from a fixed-size byte slice
     /// # Errors
     /// Errors on invalid bytes for the deserialization
-    fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self>;
+    fn deserialize(chunk: Self::Chunk) -> Result<Self, Self::Error>;
 }
 
 macro_rules! ser_num {
@@ -40,7 +61,8 @@ macro_rules! deser_num {
     ($num:ty) => {
         impl Deserialize for $num {
             type Chunk = [u8; core::mem::size_of::<$num>()];
-            fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self> {
+            type Error = std::convert::Infallible;
+            fn deserialize(chunk: Self::Chunk) -> Result<Self, Self::Error> {
                 Ok(<$num>::from_be_bytes(chunk))
             }
         }
@@ -85,8 +107,9 @@ impl<const N: usize> Serialize for [u8; N] {
 
 impl<const N: usize> Deserialize for [u8; N] {
     type Chunk = Self;
+    type Error = std::convert::Infallible;
 
-    fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self> {
+    fn deserialize(chunk: Self::Chunk) -> Result<Self, Self::Error> {
         Ok(chunk)
     }
 }
@@ -97,12 +120,12 @@ pub trait Transport {
     /// Tests to see if the connected FPGA is programmed and running
     /// # Errors
     /// Returns errors on bad transport
-    fn is_running(&mut self) -> anyhow::Result<bool>;
+    fn is_running(&mut self) -> TransportResult<bool>;
 
     /// Read an arbitrary number of bytes `n` from `device` at `offset`
     /// # Errors
     /// Returns errors on bad transport
-    fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> anyhow::Result<Vec<u8>>;
+    fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> TransportResult<Vec<u8>>;
 
     /// Read `n` bytes from `device` from byte offset `offset` into a const-sized array
     /// # Errors
@@ -111,7 +134,7 @@ pub trait Transport {
         &mut self,
         device: &str,
         offset: usize,
-    ) -> anyhow::Result<[u8; N]> {
+    ) -> TransportResult<[u8; N]> {
         Ok(self
             .read_n_bytes(device, offset, N)?
             .try_into()
@@ -131,30 +154,32 @@ pub trait Transport {
     /// ```
     /// # Errors
     /// Returns errors on bad transport or deserialization
-    fn read<T, const N: usize>(&mut self, device: &str, offset: usize) -> anyhow::Result<T>
+    fn read<T, const N: usize>(&mut self, device: &str, offset: usize) -> TransportResult<T>
     where
         T: Deserialize<Chunk = [u8; N]>,
+        Error: std::convert::From<<T as Deserialize>::Error>,
     {
         let bytes: [u8; N] = self.read_bytes(device, offset)?;
-        T::deserialize(bytes)
+        Ok(T::deserialize(bytes)?)
     }
 
     /// Generically read a `Deserializable` + `Address` type `T` from the connected platform at
     /// `device` and offset specified in the type's address.
     /// # Errors
     /// Returns errors on bad transport or deserialization
-    fn read_addr<T, const N: usize>(&mut self, device: &str) -> anyhow::Result<T>
+    fn read_addr<T, const N: usize>(&mut self, device: &str) -> TransportResult<T>
     where
         T: Deserialize<Chunk = [u8; N]> + Address,
+        Error: std::convert::From<<T as Deserialize>::Error>,
     {
         let bytes: [u8; N] = self.read_bytes(device, T::addr() as usize)?;
-        T::deserialize(bytes)
+        Ok(T::deserialize(bytes)?)
     }
 
     /// Write `data` to `device` from byte offset `offset`
     /// # Errors
     /// Returns errors on bad transport
-    fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()>;
+    fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> TransportResult<()>;
 
     /// Generically write a `Serializable` type `T` to the connected platform at `device` and offset
     /// `offset`.
@@ -175,7 +200,7 @@ pub trait Transport {
         device: &str,
         offset: usize,
         data: &T,
-    ) -> anyhow::Result<()>
+    ) -> TransportResult<()>
     where
         T: Serialize<Chunk = [u8; N]>,
     {
@@ -187,7 +212,7 @@ pub trait Transport {
     /// `device` and offset specified in the type's address.
     /// # Errors
     /// Returns errors on bad transport
-    fn write_addr<T, const N: usize>(&mut self, device: &str, data: &T) -> anyhow::Result<()>
+    fn write_addr<T, const N: usize>(&mut self, device: &str, data: &T) -> TransportResult<()>
     where
         T: Serialize<Chunk = [u8; N]> + Address,
     {
@@ -198,19 +223,19 @@ pub trait Transport {
     /// Retrieve a list of available devices on the (potentially programmed) connected platform
     /// # Errors
     /// Returns errors on bad transport
-    fn listdev(&mut self) -> anyhow::Result<RegisterMap>;
+    fn listdev(&mut self) -> TransportResult<RegisterMap>;
 
     /// Program a bitstream file from `filename` to the connected platform.
     /// Some transports can cache programed bitstreams, so the `force` variable turns off noop-ing
     /// if the bitstream is already programmed.
     /// # Errors
     /// Returns errors on bad transport
-    fn program<D>(&mut self, design: &D, force: bool) -> anyhow::Result<()>
+    fn program<D>(&mut self, design: &D, force: bool) -> TransportResult<()>
     where
         D: FpgaDesign;
 
     /// Deprograms the connected platform
     /// # Errors
     /// Returns errors on bad transport
-    fn deprogram(&mut self) -> anyhow::Result<()>;
+    fn deprogram(&mut self) -> TransportResult<()>;
 }

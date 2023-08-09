@@ -16,7 +16,6 @@
 //! <https://casper-toolflow.readthedocs.io/en/latest/src/blockdocs/Software_register.html>
 
 use crate::transport::Transport;
-use anyhow::bail;
 use fixed::traits::Fixed;
 use std::{
     marker::PhantomData,
@@ -26,6 +25,21 @@ use std::{
         Weak,
     },
 };
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Transport(#[from] crate::transport::Error),
+    #[error("We tried to write to a read-only register")]
+    ReadOnly,
+    #[error("Invalid direction specified from fpg file")]
+    BadDirection,
+    #[error("Failed to parse the bitwidth field from the fpg file")]
+    BadBitwidth,
+    #[error("The number we tried to write doesn't fit in the destination")]
+    Overflow,
+}
 
 /// The IO direction of this register
 #[derive(Debug, PartialEq, Eq)]
@@ -92,13 +106,13 @@ where
         reg_name: &str,
         io_dir: &str,
         bitwidths: &str,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, Error> {
         let direction = match io_dir {
             "To\\_Processor" => Direction::ToProcessor,
             "From\\_Processor" => Direction::FromProcessor,
-            _ => bail!("Malformed FpgDevice metadata entry"),
+            _ => return Err(Error::BadDirection),
         };
-        let width = bitwidths.parse()?;
+        let width = bitwidths.parse().map_err(|_| Error::BadBitwidth)?;
         Ok(Self {
             transport,
             direction,
@@ -112,7 +126,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn read(&self) -> anyhow::Result<F> {
+    pub fn read(&self) -> Result<F, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Perform the read
@@ -124,19 +138,19 @@ where
     /// Returns an error on bad transport
     /// # Panics
     /// Panics if the width of the register is more than 32 bits (it should never be)
-    pub fn write(&self, val: F) -> anyhow::Result<()> {
+    pub fn write(&self, val: F) -> Result<(), Error> {
         // Check direction
         if self.direction == Direction::ToProcessor {
-            bail!("This software register is read-only");
+            return Err(Error::ReadOnly);
         }
         // Check width
         if val > (2_usize.pow(self.width.try_into().unwrap()) - 1 / 2_usize.pow(F::FRAC_NBITS)) {
-            bail!("Source value too large for register size");
+            return Err(Error::Overflow);
         }
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Perform the write
-        transport.write(&self.name, 0, &(val.to_be_bytes()))
+        Ok(transport.write(&self.name, 0, &(val.to_be_bytes()))?)
     }
 }
 
@@ -161,11 +175,11 @@ where
         transport: Weak<Mutex<T>>,
         reg_name: &str,
         io_dir: &str,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, Error> {
         let direction = match io_dir {
             "To\\_Processor" => Direction::ToProcessor,
             "From\\_Processor" => Direction::FromProcessor,
-            _ => bail!("Malformed FpgDevice metadata entry"),
+            _ => return Err(Error::BadDirection),
         };
 
         Ok(Self {
@@ -179,7 +193,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn read(&self) -> anyhow::Result<bool> {
+    pub fn read(&self) -> Result<bool, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Perform the read
@@ -191,14 +205,14 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn write(&self, val: bool) -> anyhow::Result<()> {
+    pub fn write(&self, val: bool) -> Result<(), Error> {
         if self.direction == Direction::ToProcessor {
-            bail!("This software register is read-only");
+            return Err(Error::ReadOnly);
         }
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Perform the write
-        transport.write(&self.name, 0, &(u32::from(val)))
+        Ok(transport.write(&self.name, 0, &(u32::from(val)))?)
     }
 }
 

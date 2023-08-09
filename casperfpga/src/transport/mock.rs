@@ -1,22 +1,28 @@
 //! Mock transport implementations used in testing the interface
 
-use super::Transport;
+use super::{
+    Transport,
+    TransportResult,
+};
 use crate::core::{
     Register,
     RegisterMap,
 };
-use anyhow::{
-    anyhow,
-    bail,
-};
 use casper_utils::design_sources::FpgaDesign;
 use std::collections::HashMap;
+use thiserror::Error;
 
 /// A platform that mocks reads and writes, useful for testing
 #[derive(Debug)]
 pub struct Mock {
     memory: HashMap<usize, u8>,
     registers: RegisterMap,
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Tried to interact with an address that doesn't exist")]
+    Addressing,
 }
 
 impl Mock {
@@ -37,45 +43,43 @@ impl Mock {
 }
 
 impl Transport for Mock {
-    fn is_running(&mut self) -> anyhow::Result<bool> {
+    fn is_running(&mut self) -> TransportResult<bool> {
         Ok(true)
     }
 
-    fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> anyhow::Result<Vec<u8>> {
+    fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> TransportResult<Vec<u8>> {
         // Get the address in memory
         let dev = self
             .registers
             .get(device)
-            .ok_or_else(|| anyhow!("Device not found"))?;
+            .ok_or_else(|| super::Error::DeviceNotFound(device.to_string()))?;
         // Construct the array
         let mut bytes = vec![0u8; n];
         for i in offset..(offset + n) {
             // Pull bytes from memory into bytes vector
-            let byte = self
-                .memory
-                .get(&(dev.addr + i))
-                .ok_or_else(|| anyhow!("Out of bounds indexing"))?;
+            let byte = self.memory.get(&(dev.addr + i)).ok_or(Error::Addressing)?;
             bytes[i - offset] = *byte;
         }
         Ok(bytes)
     }
 
-    fn read<T, const N: usize>(&mut self, device: &str, offset: usize) -> anyhow::Result<T>
+    fn read<T, const N: usize>(&mut self, device: &str, offset: usize) -> TransportResult<T>
     where
         T: super::Deserialize<Chunk = [u8; N]>,
+        super::Error: std::convert::From<<T as super::Deserialize>::Error>,
     {
         let bytes: [u8; N] = self.read_bytes(device, offset)?;
-        T::deserialize(bytes)
+        Ok(T::deserialize(bytes)?)
     }
 
-    fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()> {
+    fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> TransportResult<()> {
         // Get the address in memory
         let dev = self
             .registers
             .get(device)
-            .ok_or_else(|| anyhow!("Device not found"))?;
+            .ok_or_else(|| super::Error::DeviceNotFound(device.to_string()))?;
         if dev.length - offset < data.len() {
-            bail!("Attempting to write to a nonexistent address");
+            return Err(Error::Addressing.into());
         }
         for (i, byte) in data.iter().enumerate() {
             self.memory.insert(dev.addr + i + offset, *byte);
@@ -88,7 +92,7 @@ impl Transport for Mock {
         device: &str,
         offset: usize,
         data: &T,
-    ) -> anyhow::Result<()>
+    ) -> TransportResult<()>
     where
         T: super::Serialize<Chunk = [u8; N]>,
     {
@@ -96,18 +100,18 @@ impl Transport for Mock {
         self.write_bytes(device, offset, &data.serialize())
     }
 
-    fn listdev(&mut self) -> anyhow::Result<RegisterMap> {
+    fn listdev(&mut self) -> TransportResult<RegisterMap> {
         Ok(self.registers.clone())
     }
 
-    fn program<D>(&mut self, _design: &D, _force: bool) -> anyhow::Result<()>
+    fn program<D>(&mut self, _design: &D, _force: bool) -> TransportResult<()>
     where
         D: FpgaDesign,
     {
         todo!()
     }
 
-    fn deprogram(&mut self) -> anyhow::Result<()> {
+    fn deprogram(&mut self) -> TransportResult<()> {
         todo!()
     }
 }

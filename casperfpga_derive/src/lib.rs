@@ -34,9 +34,10 @@ pub fn derive_casper_serde(tokens: TokenStream) -> TokenStream {
 
         impl Deserialize for #block_name {
             type Chunk = <Self as PackedStruct>::ByteArray;
+            type Error = PackingError;
 
-            fn deserialize(chunk: Self::Chunk) -> anyhow::Result<Self> {
-                Ok(Self::unpack(&chunk)?)
+            fn deserialize(chunk: Self::Chunk) -> Result<Self, Self::Error> {
+                Self::unpack(&chunk)
             }
         }
     };
@@ -74,6 +75,7 @@ pub fn address(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro]
 /// Generates a fully-typed and specified FPGA instance using the object definitions from a given
 /// fpg file.
+#[allow(clippy::missing_panics_doc)]
 pub fn fpga_from_fpg(tokens: TokenStream) -> TokenStream {
     let FpgFpga { name, filename } = parse_macro_input!(tokens as FpgFpga);
     let filename = filename.value();
@@ -96,7 +98,7 @@ pub fn fpga_from_fpg(tokens: TokenStream) -> TokenStream {
         where
             T: casperfpga::transport::Transport
         {
-            pub fn new(transport: T) -> anyhow::Result<Self> {
+            pub fn new(transport: T) -> Result<Self, casperfpga::yellow_blocks::Error> {
                 // Create the Arc Mutex for the transport
                 let tarc = std::sync::Arc::new(std::sync::Mutex::new(transport));
                 // And create the weak to pass to the yellow blocks

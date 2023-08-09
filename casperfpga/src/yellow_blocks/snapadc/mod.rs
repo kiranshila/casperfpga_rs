@@ -22,11 +22,27 @@ use self::{
     lmx::Synth,
 };
 use crate::transport::Transport;
-use anyhow::bail;
 use std::sync::{
     Mutex,
     Weak,
 };
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Transport(#[from] crate::transport::Error),
+    #[error(transparent)]
+    Controller(#[from] controller::Error),
+    #[error(transparent)]
+    Clockswitch(#[from] clockswitch::Error),
+    #[error("Invalid number of SNAP inputs from the fpg file")]
+    BadSnapInputs,
+    #[error("Only the  8 bit resolution HMCAD1511 is supported - PRs welcome :)")]
+    BadAdcResolution,
+    #[error("Bad sample rate from the fpg file")]
+    BadSampleRate,
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 /// Valid modes for each HMCAD1511 ADC
@@ -78,15 +94,15 @@ where
         sample_rate: &str,
         snap_inputs: &str,
         clock_src: &str,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, Error> {
         let mode = match snap_inputs {
             "12" => AdcMode::Quad,
             "6" => AdcMode::Dual,
             "3" => AdcMode::Single,
-            _ => bail!("Invalid number of snap_inputs"),
+            _ => return Err(Error::BadSnapInputs),
         };
         if adc_resolution != "8" {
-            bail!("Only the  8 bit resolution HMCAD1511 is supported - PRs welcome :)");
+            return Err(Error::BadAdcResolution);
         }
         let clksw = ClockSwitch::new(transport.clone());
         let synth = Synth::new(transport.clone());
@@ -97,7 +113,7 @@ where
         };
         Ok(Self {
             transport,
-            sample_rate: sample_rate.parse()?,
+            sample_rate: sample_rate.parse().map_err(|_| Error::BadSampleRate)?,
             mode,
             clksw,
             synth,
@@ -111,27 +127,27 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn snapshot(&self, chip: SnapAdcChip) -> anyhow::Result<[u8; 1024]> {
+    pub fn snapshot(&self, chip: SnapAdcChip) -> Result<[u8; 1024], Error> {
         // Request the snapshot
         self.controller.snap_req()?;
         // Then read the BRAM
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
-        transport.read_bytes(
+        Ok(transport.read_bytes(
             match chip {
                 SnapAdcChip::A => Self::RAM0_NAME,
                 SnapAdcChip::B => Self::RAM1_NAME,
                 SnapAdcChip::C => Self::RAM2_NAME,
             },
             0,
-        )
+        )?)
     }
 
     /// Initializes the ADCs - follow this up by setting the controller crossbar and calibrating
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn initialize(&mut self) -> anyhow::Result<()> {
+    pub fn initialize(&mut self) -> Result<(), Error> {
         // Start off with a reset
         self.controller.reset()?;
         // Chip select all the ADCs in the SNAP
@@ -182,7 +198,7 @@ where
     /// Returns an error on bad transport
     /// # Panics
     /// Panics if the given input selection does not match the current mode
-    pub fn select_inputs(&self, inputs: ChannelInput) -> anyhow::Result<()> {
+    pub fn select_inputs(&self, inputs: ChannelInput) -> Result<(), Error> {
         // Extract channel mode and assert
         match self.mode {
             AdcMode::Single => assert!(matches!(inputs, ChannelInput::Single(_))),
@@ -190,7 +206,7 @@ where
             AdcMode::Quad => assert!(matches!(inputs, ChannelInput::Quad(_, _, _, _))),
         };
         // Then set
-        self.controller.input_select(inputs)
+        Ok(self.controller.input_select(inputs)?)
     }
 }
 

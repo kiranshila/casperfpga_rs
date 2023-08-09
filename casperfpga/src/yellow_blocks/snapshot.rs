@@ -5,7 +5,6 @@ use crate::transport::{
     Serialize,
     Transport,
 };
-use anyhow::bail;
 use casperfpga_derive::CasperSerde;
 use num_traits::Unsigned;
 use packed_struct::prelude::*;
@@ -17,6 +16,18 @@ use std::{
         Weak,
     },
 };
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Transport(#[from] crate::transport::Error),
+    #[error("Failed to parse number of samples from fpg file")]
+    BadSampleN,
+    #[error("The snapshot block that we tried to set an offset on didn't support offsets")]
+    NoOffsets,
+}
+
 /// The snapshot yellow block to capture a chunk of samples
 #[derive(Debug)]
 pub struct Snapshot<T, F> {
@@ -85,8 +96,8 @@ where
         reg_name: &str,
         nsamples: &str,
         offset: &str,
-    ) -> anyhow::Result<Self> {
-        let samples_n = nsamples.parse()?;
+    ) -> Result<Self, Error> {
+        let samples_n = nsamples.parse().map_err(|_| Error::BadSampleN)?;
         let has_offset = match offset {
             "off" => false,
             "on" => true,
@@ -105,7 +116,7 @@ where
     /// # Errors
     /// Returns an error on transport errors
     #[allow(clippy::missing_panics_doc)]
-    pub fn arm(&self) -> anyhow::Result<()> {
+    pub fn arm(&self) -> Result<(), Error> {
         let control_reg = format!("{}_ctrl", self.name);
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -122,7 +133,7 @@ where
     /// # Errors
     /// Returns an error on transport errors
     #[allow(clippy::missing_panics_doc)]
-    pub fn read(&self) -> anyhow::Result<Vec<u8>> {
+    pub fn read(&self) -> Result<Vec<u8>, Error> {
         let status_reg = format!("{}_status", self.name);
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -139,7 +150,7 @@ where
     /// # Errors
     /// Returns an error on transport errors
     #[allow(clippy::missing_panics_doc)]
-    pub fn trigger(&self) -> anyhow::Result<()> {
+    pub fn trigger(&self) -> Result<(), Error> {
         let control_reg = format!("{}_ctrl", self.name);
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
@@ -153,14 +164,14 @@ where
     /// # Errors
     /// Returns an error on transport errors and when the snapshot block doesn't support offsets
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_offset(&self, offset: u32) -> anyhow::Result<()> {
+    pub fn set_offset(&self, offset: u32) -> Result<(), Error> {
         if self.has_offset {
             let offset_reg = format!("{}_trig_offset", self.name);
             let tarc = self.transport.upgrade().unwrap();
             let mut transport = (*tarc).lock().unwrap();
             transport.write(&offset_reg, 0, &offset)?;
         } else {
-            bail!("This snapshot block doesn't support offsets");
+            return Err(Error::NoOffsets);
         }
         Ok(())
     }

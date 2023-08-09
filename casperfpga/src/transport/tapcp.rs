@@ -1,11 +1,12 @@
 //! The casperfpga transport implementations for TAPCP
-
-use super::Transport;
+use super::{
+    Transport,
+    TransportResult,
+};
 use crate::core::{
     Register,
     RegisterMap,
 };
-use anyhow::bail;
 use casper_utils::design_sources::FpgaDesign;
 use indicatif::ProgressBar;
 use kstring::KString;
@@ -17,9 +18,18 @@ use std::{
     },
     time::Duration,
 };
+use thiserror::Error;
 
 const DEFAULT_TIMEOUT: f32 = 0.5;
 const DEFAULT_RETRIES: usize = 20;
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("Internal system IO error")]
+    Io(#[from] std::io::Error),
+    #[error("Error from the lower-level TAPCP library")]
+    Lower(#[from] tapcp::Error),
+}
 
 /// Platforms that support TAPCP
 #[derive(Debug, Copy, Clone)]
@@ -53,14 +63,18 @@ impl Tapcp {
     /// Create and connect to a TAPCP transport
     /// # Errors
     /// Will return an error if the UDP socket fails to connect
-    pub fn connect(host: SocketAddr, platform: Platform) -> anyhow::Result<Self> {
-        let socket = UdpSocket::bind("0.0.0.0:0")?;
+    pub fn connect(host: SocketAddr, platform: Platform) -> TransportResult<Self> {
+        let socket = UdpSocket::bind("0.0.0.0:0").map_err(Error::from)?;
         // Set a default timeout
         let timeout = Duration::from_secs_f32(DEFAULT_TIMEOUT);
-        socket.set_write_timeout(Some(timeout))?;
-        socket.set_read_timeout(Some(timeout))?;
+        socket
+            .set_write_timeout(Some(timeout))
+            .map_err(Error::from)?;
+        socket
+            .set_read_timeout(Some(timeout))
+            .map_err(Error::from)?;
         // Connect
-        socket.connect(host)?;
+        socket.connect(host).map_err(Error::from)?;
         // And return
         Ok(Self {
             socket,
@@ -73,41 +87,39 @@ impl Tapcp {
 // Transport trait implementations
 
 impl Transport for Tapcp {
-    fn is_running(&mut self) -> anyhow::Result<bool> {
+    fn is_running(&mut self) -> TransportResult<bool> {
         // Check if sys_clkcounter exists
         match tapcp::read_device("sys_clkcounter", 0, 1, &mut self.socket, self.retries) {
             Ok(_) => Ok(true),
             // In the case we get back a file not found error,
             // that implies the device is not running a user program.
             // Any other error is actually an error
-            Err(e1) => match e1.downcast_ref::<tftp_client::Error>() {
-                Some(e2) => match e2 {
-                    tftp_client::Error::Protocol { code, msg } => match code {
-                        tftp_client::parser::ErrorCode::NoFile => Ok(false),
-                        _ => bail!(e1),
-                    },
-                    _ => bail!(e1),
-                },
-                None => bail!(e1),
+            Err(e) => match e {
+                tapcp::Error::Tftp(tftp_client::Error::Protocol {
+                    code: tftp_client::parser::ErrorCode::NoFile,
+                    msg: _,
+                }) => Ok(false),
+                _ => Err(Error::Lower(e).into()),
             },
         }
     }
 
-    fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> anyhow::Result<()> {
+    fn write_bytes(&mut self, device: &str, offset: usize, data: &[u8]) -> TransportResult<()> {
         // The inverted version of `read_vec`. The problem here is if we are not writing a 4 byte
         // chunk (which we need to), we have to read the bytes that are already there and include
         // them. Because we don't want to do this read when we don't have to, we will branch
         if (offset % 4) == 0 && (data.len() % 4) == 0 {
             // Just do the write
-            tapcp::write_device(device, offset % 4, data, &mut self.socket, self.retries)?;
+            tapcp::write_device(device, offset % 4, data, &mut self.socket, self.retries)
+                .map_err(Error::from)?;
         } else {
             unimplemented!()
         }
         Ok(())
     }
 
-    fn listdev(&mut self) -> anyhow::Result<RegisterMap> {
-        let devices = tapcp::listdev(&mut self.socket, self.retries)?;
+    fn listdev(&mut self) -> TransportResult<RegisterMap> {
+        let devices = tapcp::listdev(&mut self.socket, self.retries).map_err(Error::from)?;
         Ok(devices
             .iter()
             .map(|(k, (addr, len))| {
@@ -125,7 +137,7 @@ impl Transport for Tapcp {
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_precision_loss)]
-    fn program<D>(&mut self, design: &D, force: bool) -> anyhow::Result<()>
+    fn program<D>(&mut self, design: &D, force: bool) -> TransportResult<()>
     where
         D: FpgaDesign,
     {
@@ -165,7 +177,8 @@ impl Transport for Tapcp {
                 chunk,
                 &mut self.socket,
                 retries,
-            )?;
+            )
+            .map_err(Error::from)?;
             bar.inc(1);
         }
         bar.finish();
@@ -185,15 +198,16 @@ impl Transport for Tapcp {
                 Platform::SNAP2 => self.platform.program_location(),
             },
             &mut self.socket,
-        )?;
+        )
+        .map_err(Error::from)?;
         Ok(())
     }
 
-    fn deprogram(&mut self) -> anyhow::Result<()> {
-        tapcp::progdev(0, &mut self.socket)
+    fn deprogram(&mut self) -> TransportResult<()> {
+        Ok(tapcp::progdev(0, &mut self.socket).map_err(Error::from)?)
     }
 
-    fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> anyhow::Result<Vec<u8>> {
+    fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> TransportResult<Vec<u8>> {
         // TAPCP works on a block of size 4 bytes, so we need to do some chunking and slicing
         // The goal here is to be efficient, we don't want to query bytes we don't need.
         // The "worst case" is when we want to read bytes between words
@@ -204,7 +218,8 @@ impl Transport for Tapcp {
         let first_word = offset / 4;
         let last_word = (offset + n) / 4;
         let word_n = last_word - first_word;
-        let bytes = tapcp::read_device(device, first_word, word_n, &mut self.socket, self.retries)?;
+        let bytes = tapcp::read_device(device, first_word, word_n, &mut self.socket, self.retries)
+            .map_err(Error::from)?;
         // Now we slice out the the relevant chunk
         let start_idx = offset % 4;
         Ok(bytes[start_idx..start_idx + n].to_vec())
@@ -216,26 +231,26 @@ impl Tapcp {
     /// Gets the temperature from the connected device in Celsius
     /// # Errors
     /// Returns errors on transport failures
-    pub fn temperature(&mut self) -> anyhow::Result<f32> {
-        tapcp::temp(&mut self.socket, self.retries)
+    pub fn temperature(&mut self) -> Result<f32, Error> {
+        Ok(tapcp::temp(&mut self.socket, self.retries)?)
     }
 
     /// Gets the metadata for the currently programed design
     /// # Errors
     /// Returns errors on transport failures
-    pub fn metadata(&mut self) -> anyhow::Result<HashMap<KString, String>> {
-        tapcp::get_metadata(
+    pub fn metadata(&mut self) -> Result<HashMap<KString, String>, Error> {
+        Ok(tapcp::get_metadata(
             &mut self.socket,
             self.platform.flash_location(),
             self.retries,
-        )
+        )?)
     }
 
     /// Update the metadata entry given a design
     /// Currently not completley compatible with python as we only store the md5
     /// # Panics
     /// Panics if the filename of fpg file is not a valid rust string
-    fn update_metadata<D>(&mut self, design: &D) -> anyhow::Result<()>
+    fn update_metadata<D>(&mut self, design: &D) -> Result<(), Error>
     where
         D: FpgaDesign,
     {
@@ -246,143 +261,11 @@ impl Tapcp {
         .into_iter()
         .map(|(k, v)| (k.into(), v))
         .collect();
-        tapcp::set_metadata(
+        Ok(tapcp::set_metadata(
             &meta,
             &mut self.socket,
             self.platform.flash_location(),
             self.retries,
-        )
-    }
-}
-
-#[cfg(feature = "python")]
-#[allow(clippy::pedantic)]
-pub(crate) mod python {
-    use super::*;
-    use crate::transport::Transport;
-    use anyhow::anyhow;
-    use casper_utils::design_sources::fpg;
-    use pyo3::{
-        conversion::ToPyObject,
-        prelude::*,
-        types::PyBytes,
-    };
-    pub(crate) fn add_tapcp(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-        /// Transport via TAPCP - connects on construction.
-        /// Requires a platform string, either "SNAP" or "SNAP2".
-        #[pyclass(text_signature = "(ip)")]
-        struct Tapcp(super::Tapcp);
-
-        #[pymethods]
-        impl Tapcp {
-            #[new]
-            fn new(ip: String, platform: String) -> PyResult<Self> {
-                let plat = match platform.as_ref() {
-                    "snap" => Platform::SNAP,
-                    "snap2" => Platform::SNAP2,
-                    _ => return Err(anyhow!("Unsupported platform").into()),
-                };
-                let inner = super::Tapcp::connect(ip.parse()?, plat)?;
-                Ok(Tapcp(inner))
-            }
-
-            fn is_running(&mut self) -> PyResult<bool> {
-                Ok(self.0.is_running()?)
-            }
-
-            #[pyo3(text_signature = "($self,device,n, offset)")]
-            #[args(offset = "0")]
-            fn read_bytes(
-                &mut self,
-                py: Python,
-                device: &str,
-                n: usize,
-                offset: usize,
-            ) -> PyResult<PyObject> {
-                Ok(PyBytes::new(py, &self.0.read_n_bytes(device, offset, n)?).into())
-            }
-
-            #[pyo3(text_signature = "($self,device,offset)")]
-            #[args(offset = "0")]
-            fn read_int(&mut self, device: &str, offset: usize) -> PyResult<i32> {
-                let val: i32 = self.0.read(device, offset)?;
-                Ok(val)
-            }
-
-            #[pyo3(text_signature = "($self,device,offset)")]
-            #[args(offset = "0")]
-            fn read_float(&mut self, device: &str, offset: usize) -> PyResult<f32> {
-                let val: f32 = self.0.read(device, offset)?;
-                Ok(val)
-            }
-
-            #[pyo3(text_signature = "($self,device,offset)")]
-            #[args(offset = "0")]
-            fn read_bool(&mut self, device: &str, offset: usize) -> PyResult<bool> {
-                let val: i32 = self.0.read(device, offset)?;
-                Ok(val == 1)
-            }
-
-            #[pyo3(text_signature = "($self,device,n, offset)")]
-            #[args(offset = "0")]
-            fn write_bytes(
-                &mut self,
-                py: Python,
-                bytes: Py<PyBytes>,
-                device: String,
-                offset: usize,
-            ) -> PyResult<()> {
-                let data = bytes.as_bytes(py);
-                Ok(self.0.write_bytes(&device, offset, data)?)
-            }
-
-            #[pyo3(text_signature = "($self,device,offset)")]
-            #[args(offset = "0")]
-            fn write_int(&mut self, val: i32, device: &str, offset: usize) -> PyResult<()> {
-                Ok(self.0.write(device, offset, &val)?)
-            }
-
-            #[pyo3(text_signature = "($self,device,offset)")]
-            #[args(offset = "0")]
-            fn write_float(&mut self, val: f32, device: &str, offset: usize) -> PyResult<()> {
-                Ok(self.0.write(device, offset, &val)?)
-            }
-
-            #[pyo3(text_signature = "($self,device,offset)")]
-            #[args(offset = "0")]
-            fn write_bool(&mut self, val: bool, device: &str, offset: usize) -> PyResult<()> {
-                Ok(self.0.write(device, offset, &(u32::from(val)))?)
-            }
-
-            #[pyo3(text_signature = "($self)")]
-            fn listdev(&mut self, py: Python) -> PyResult<PyObject> {
-                let devices: Vec<_> = self
-                    .0
-                    .listdev()?
-                    .into_keys()
-                    .map(|k| k.to_string())
-                    .collect();
-                Ok(devices.to_object(py))
-            }
-
-            #[pyo3(text_signature = "($self, filename)")]
-            fn program(&mut self, filename: String, force: bool) -> PyResult<()> {
-                let file = fpg::read_fpg_file(filename)?;
-                Ok(self.0.program(&file, force)?)
-            }
-
-            #[pyo3(text_signature = "($self)")]
-            fn deprogram(&mut self) -> PyResult<()> {
-                Ok(self.0.deprogram()?)
-            }
-
-            #[pyo3(text_signature = "($self)")]
-            fn temperature(&mut self) -> PyResult<f32> {
-                Ok(self.0.temperature()?)
-            }
-        }
-
-        m.add_class::<Tapcp>()?;
-        Ok(())
+        )?)
     }
 }

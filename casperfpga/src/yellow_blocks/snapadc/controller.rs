@@ -16,7 +16,6 @@ use crate::{
     },
     yellow_blocks::Address,
 };
-use anyhow::bail;
 use casperfpga_derive::{
     address,
     CasperSerde,
@@ -26,6 +25,15 @@ use std::sync::{
     Mutex,
     Weak,
 };
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Transport(#[from] crate::transport::Error),
+    #[error("ADC16 controller doesn't support demux modes")]
+    NoDemux,
+}
 
 /// Controller for the ADC chips themselves
 #[derive(Debug)]
@@ -54,7 +62,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn supported_chips(&self) -> anyhow::Result<u8> {
+    pub fn supported_chips(&self) -> Result<u8, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let word: Adc3Wire = transport.read_addr(Self::NAME)?;
@@ -65,7 +73,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn revision(&self) -> anyhow::Result<u8> {
+    pub fn revision(&self) -> Result<u8, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let word: Adc3Wire = transport.read_addr(Self::NAME)?;
@@ -76,7 +84,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn locked(&self) -> anyhow::Result<bool> {
+    pub fn locked(&self) -> Result<bool, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let word: Adc3Wire = transport.read_addr(Self::NAME)?;
@@ -98,7 +106,7 @@ where
     /// Cursed bit-banging to send a bit to the current chip select taking a mutable transport ref
     /// # Errors
     /// Returns an error on bad transport
-    fn send_3wire_bit(&self, transport: &mut T, bit: bool) -> anyhow::Result<()> {
+    fn send_3wire_bit(&self, transport: &mut T, bit: bool) -> Result<(), Error> {
         // Clock low, data and chip select set accordingly
         transport.write_addr(
             Self::NAME,
@@ -122,7 +130,7 @@ where
         Ok(())
     }
 
-    fn send_reg_raw(&self, transport: &mut T, addr: u8, val: u16) -> anyhow::Result<()> {
+    fn send_reg_raw(&self, transport: &mut T, addr: u8, val: u16) -> Result<(), Error> {
         // Idle
         transport.write_addr(Self::NAME, &Adc3Wire::idle())?;
         // Write the address
@@ -139,14 +147,15 @@ where
     }
 
     /// Cursed bit-banging to send an ADC register over the 3 wire to the current chip select
-    fn send_reg<R>(&self, transport: &mut T, reg: &R) -> anyhow::Result<()>
+    fn send_reg<R>(&self, transport: &mut T, reg: &R) -> Result<(), Error>
     where
         R: Address + PackedStruct,
     {
         // Convert the register into an address and data to bitbang
         let addr = R::addr();
         let mut packed = [0u8; 2];
-        reg.pack_to_slice(&mut packed)?;
+        reg.pack_to_slice(&mut packed)
+            .map_err(crate::transport::Error::Packing)?;
         let value = u16::from_be_bytes(packed);
         self.send_reg_raw(
             transport,
@@ -161,7 +170,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn supports_demux(&self) -> anyhow::Result<bool> {
+    pub fn supports_demux(&self) -> Result<bool, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Check to see if we support demux by testing the demux write enable bit
@@ -182,7 +191,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn get_demux(&self) -> anyhow::Result<Option<DemuxMode>> {
+    pub fn get_demux(&self) -> Result<Option<DemuxMode>, Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         Ok(if self.supports_demux()? {
@@ -208,7 +217,7 @@ where
     /// method.  Mismatches will result in improper interpretation of the data. method.
     /// Mismatches will result in improper interpretation of the data.
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_demux(&self, mode: DemuxMode) -> anyhow::Result<()> {
+    pub fn set_demux(&self, mode: DemuxMode) -> Result<(), Error> {
         if self.supports_demux()? {
             let tarc = self.transport.upgrade().unwrap();
             let mut transport = (*tarc).lock().unwrap();
@@ -219,7 +228,7 @@ where
             transport.write_addr(Self::NAME, &ctl)?;
             Ok(())
         } else {
-            bail!("Current gateware doesn't support demux modes");
+            Err(Error::NoDemux)
         }
     }
 
@@ -227,7 +236,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn reset(&self) -> anyhow::Result<()> {
+    pub fn reset(&self) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         self.send_reg(&mut transport, &Reset { reset: true })
@@ -237,7 +246,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn power_down(&self) -> anyhow::Result<()> {
+    pub fn power_down(&self) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Powerdown
@@ -254,7 +263,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn power_up(&self) -> anyhow::Result<()> {
+    pub fn power_up(&self) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Powerdown
@@ -271,7 +280,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn power_cycle(&mut self) -> anyhow::Result<()> {
+    pub fn power_cycle(&mut self) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Powerdown
@@ -299,7 +308,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn enable_pattern(&self, pat: TestPattern) -> anyhow::Result<()> {
+    pub fn enable_pattern(&self, pat: TestPattern) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         self.send_reg(&mut transport, &PatternCtl::default())?;
@@ -343,7 +352,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn custom_1(&self, bits: [bool; 8]) -> anyhow::Result<()> {
+    pub fn custom_1(&self, bits: [bool; 8]) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         self.send_reg(&mut transport, &CustomPattern1 { bits_custom1: bits })
@@ -353,7 +362,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn custom_2(&self, bits: [bool; 8]) -> anyhow::Result<()> {
+    pub fn custom_2(&self, bits: [bool; 8]) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         self.send_reg(&mut transport, &CustomPattern2 { bits_custom2: bits })
@@ -363,7 +372,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn bitslip(&self, bitslips: Bitslip) -> anyhow::Result<()> {
+    pub fn bitslip(&self, bitslips: Bitslip) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         let slip = AdcControl {
@@ -380,7 +389,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn snap_req(&self) -> anyhow::Result<()> {
+    pub fn snap_req(&self) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Request the snapshot
@@ -400,7 +409,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn set_operating_mode(&self, mode: AdcMode, freq: f64) -> anyhow::Result<()> {
+    pub fn set_operating_mode(&self, mode: AdcMode, freq: f64) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
 
@@ -433,7 +442,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn init(&mut self, mode: AdcMode, freq: f64) -> anyhow::Result<()> {
+    pub fn init(&mut self, mode: AdcMode, freq: f64) -> Result<(), Error> {
         self.reset()?;
         self.power_down()?;
         self.set_operating_mode(mode, freq)?;
@@ -445,7 +454,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn input_select(&self, inputs: ChannelInput) -> anyhow::Result<()> {
+    pub fn input_select(&self, inputs: ChannelInput) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         // Make the selections
@@ -492,7 +501,7 @@ where
     /// # Errors
     /// Returns an error on bad transport
     #[allow(clippy::missing_panics_doc)]
-    pub fn disable_termination(&self) -> anyhow::Result<()> {
+    pub fn disable_termination(&self) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         self.send_reg(
@@ -513,7 +522,7 @@ where
         lclk: LvdsTermination,
         frame: LvdsTermination,
         data: LvdsTermination,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         self.send_reg(
@@ -536,7 +545,7 @@ where
         lclk: LvdsDriveStrength,
         frame: LvdsDriveStrength,
         data: LvdsDriveStrength,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         let tarc = self.transport.upgrade().unwrap();
         let mut transport = (*tarc).lock().unwrap();
         self.send_reg(

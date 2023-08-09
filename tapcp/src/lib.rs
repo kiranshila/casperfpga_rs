@@ -3,11 +3,11 @@
 
 mod csl;
 
-use anyhow::bail;
 use kstring::KString;
 use std::{
     collections::HashMap,
     ffi::CStr,
+    fmt::Write,
     net::UdpSocket,
     time::Duration,
 };
@@ -15,25 +15,40 @@ use tftp_client::{
     download,
     upload,
 };
+use thiserror::Error;
 
 pub const FLASH_SECTOR_SIZE: u32 = 0x10000;
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(500);
 pub const MAX_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Tftp(#[from] tftp_client::Error),
+    #[error("Some part of the received payload was incomplete")]
+    Incomplete,
+    #[error("While trying to parse a string from a response, we received invalid UTF8")]
+    Utf8(#[from] std::str::Utf8Error),
+    #[error("No metadata returned when we requested metadata")]
+    MissingMetadata,
+}
 
 /// Gets the temperature of the remote device in Celsius
 /// # Errors
 /// Returns an error on TFTP errors
 /// # Panics
 /// Panics if we did not get back enough bytes
-pub fn temp(socket: &mut UdpSocket, retries: usize) -> anyhow::Result<f32> {
+pub fn temp(socket: &mut UdpSocket, retries: usize) -> Result<f32, Error> {
     let bytes = download("/temp", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
-    Ok(f32::from_be_bytes(bytes[..4].try_into()?))
+    Ok(f32::from_be_bytes(
+        bytes[..4].try_into().map_err(|_| Error::Incomplete)?,
+    ))
 }
 
 /// Gets the list of top level commands (as a string)
 /// # Errors
 /// Returns an error on TFTP errors
-pub fn help(socket: &mut UdpSocket, retries: usize) -> anyhow::Result<String> {
+pub fn help(socket: &mut UdpSocket, retries: usize) -> Result<String, Error> {
     let bytes = download("/help", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
     Ok(std::str::from_utf8(&bytes)?.to_string())
 }
@@ -45,7 +60,7 @@ pub fn help(socket: &mut UdpSocket, retries: usize) -> anyhow::Result<String> {
 pub fn listdev(
     socket: &mut UdpSocket,
     retries: usize,
-) -> anyhow::Result<HashMap<String, (u32, u32)>> {
+) -> Result<HashMap<String, (u32, u32)>, Error> {
     // Create the hash map we'll be constructing to hold the device list
     let mut dev_map = HashMap::new();
 
@@ -80,8 +95,8 @@ pub fn listdev(
         let value = unsafe { std::slice::from_raw_parts(value_ptr, 8) };
 
         // The first 4 byte word is the offset (address) and the second is the length
-        let addr = u32::from_be_bytes(value[..4].try_into()?);
-        let length = u32::from_be_bytes(value[4..].try_into()?);
+        let addr = u32::from_be_bytes(value[..4].try_into().map_err(|_| Error::Incomplete)?);
+        let length = u32::from_be_bytes(value[4..].try_into().map_err(|_| Error::Incomplete)?);
 
         // Finally, push this all to our hash map
         dev_map.insert(key, (addr, length));
@@ -100,15 +115,16 @@ pub fn read_device(
     n: usize,
     socket: &mut UdpSocket,
     retries: usize,
-) -> anyhow::Result<Vec<u8>> {
+) -> Result<Vec<u8>, Error> {
     // To start the request, we need to form the filename string, defined by the TAPCP
     // spec as - `/dev/DEV_NAME[.WORD_OFFSET[.NWORDS]]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/dev/{device}.{offset:x}.{n:x}");
     let bytes = download(filename, socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
     if n != 0 && bytes.len() != n * 4 {
-        bail!("We did not receive the number of bytes we expected");
+        Err(Error::Incomplete)
+    } else {
+        Ok(bytes)
     }
-    Ok(bytes)
 }
 
 /// Write bytes to the device named `device`
@@ -120,7 +136,7 @@ pub fn write_device(
     data: &[u8],
     socket: &mut UdpSocket,
     retries: usize,
-) -> anyhow::Result<()> {
+) -> Result<(), Error> {
     // To start the request, we need to form the filename string, defined by the TAPCP
     // spec as - `/dev/DEV_NAME[.WORD_OFFSET]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/dev/{device}.{offset:x}");
@@ -144,7 +160,7 @@ pub fn read_flash(
     n: usize,
     socket: &mut UdpSocket,
     retries: usize,
-) -> anyhow::Result<Vec<u8>> {
+) -> Result<Vec<u8>, Error> {
     // spec as - `/flash.WORD_OFFSET[.NWORDS]` with WORD_OFFSET and NWORDs in hexadecimal
     let filename = format!("/flash.{offset:x}.{n:x}");
     let bytes = download(&filename, socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
@@ -160,7 +176,7 @@ pub fn write_flash(
     data: &[u8],
     socket: &mut UdpSocket,
     retries: usize,
-) -> anyhow::Result<()> {
+) -> Result<(), Error> {
     let filename = format!("/flash.{offset:x}");
     Ok(upload(
         &filename,
@@ -176,7 +192,7 @@ pub fn write_flash(
 /// No validation is performed to ensure a program actually exists there
 /// # Errors
 /// Returns an error on TFTP errors
-pub fn progdev(addr: u32, socket: &mut UdpSocket) -> anyhow::Result<()> {
+pub fn progdev(addr: u32, socket: &mut UdpSocket) -> Result<(), Error> {
     match upload(
         "/progdev",
         &addr.to_be_bytes(),
@@ -199,13 +215,13 @@ pub fn get_metadata(
     socket: &mut UdpSocket,
     user_flash_loc: u32,
     retries: usize,
-) -> anyhow::Result<HashMap<KString, String>> {
+) -> Result<HashMap<KString, String>, Error> {
     let mut dict_str = String::new();
     let mut chunks = 0;
     let chunk_size = 1024 / 4;
     loop {
         if chunks > 128 {
-            bail!("No metadata found");
+            return Err(Error::MissingMetadata);
         }
         let raw = read_flash(
             (user_flash_loc / 4 + chunks * chunk_size) as usize,
@@ -213,7 +229,7 @@ pub fn get_metadata(
             socket,
             retries,
         )?;
-        dict_str.push_str(&String::from_utf8(raw)?);
+        dict_str.push_str(std::str::from_utf8(&raw)?);
         match dict_str.find("?end") {
             Some(idx) => {
                 dict_str = dict_str.split_at(idx).0.to_string();
@@ -238,13 +254,13 @@ pub fn set_metadata(
     socket: &mut UdpSocket,
     user_flash_loc: u32,
     retries: usize,
-) -> anyhow::Result<()> {
+) -> Result<(), Error> {
     // Dict is written as ?<key>\t<value> pairs followed by ?end
     // It must be padded with zeros to be a multiple of 1024
-    let mut dict_str = data
-        .iter()
-        .map(|(k, v)| format!("?{k}\t{v}"))
-        .collect::<String>();
+    let mut dict_str = data.iter().fold(String::new(), |mut output, (k, v)| {
+        let _ = write!(output, "?{k}\t{v}");
+        output
+    });
     dict_str.push_str("?end");
     let mut bytes = dict_str.as_bytes().to_vec();
     // Padding
