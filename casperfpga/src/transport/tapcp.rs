@@ -65,6 +65,8 @@ impl Tapcp {
     /// Will return an error if the UDP socket fails to connect
     pub fn connect(host: SocketAddr, platform: Platform) -> TransportResult<Self> {
         let socket = UdpSocket::bind("0.0.0.0:0").map_err(Error::from)?;
+        // Make sure we're blocking
+        socket.set_nonblocking(false).map_err(Error::from)?;
         // Set a default timeout
         let timeout = Duration::from_secs_f32(DEFAULT_TIMEOUT);
         socket
