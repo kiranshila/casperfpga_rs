@@ -11,7 +11,7 @@ keywords = ["astronomy", "fpga", "tftp"]
 categories = ["hardware-support"]
 
 [dependencies]
-num-derive = "0.3"
+num-derive = "0.4"
 num-traits = "0.2"
 thiserror = "1"
 kstring = "2"
@@ -19,7 +19,7 @@ tftp_client = "0.1"
 tracing = "0.1"
 
 [build-dependencies]
-bindgen = "0.66"
+bindgen = "0.68"
 cc = "1"
 
 [dev-dependencies]
