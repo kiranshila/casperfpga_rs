@@ -16,6 +16,14 @@ A Rust library for interfacing with CASPER Collaboration FPGA devices. Unlike th
 
 ## Future Work
 
+### Yellow Blocks
+
+There are quite a few missing yellow blocks in this library, mainly due to the fact that I don't have hardware to test them on. PRs (or hardware donations) welcome!
+
+### Transports
+
+Reconcile [katcp](https://github.com/kiranshila/katcp) requirements with "as implemented" details from CASPER devices to add katcp as a transport mechanism.
+
 ### Device Tree
 
 Currently, `.fpg` files are the source of automatically generating typesafe interfaces for a given design. If CASPER adopts device tree, we'd want to write a parser that performs the same translation.
