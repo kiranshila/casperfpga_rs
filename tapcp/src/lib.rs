@@ -39,7 +39,7 @@ pub enum Error {
 // but bail on all others
 fn retrying_download(
     filename: &str,
-    socket: &mut UdpSocket,
+    socket: &UdpSocket,
     timeout: Duration,
     max_timeout: Duration,
     retries: usize,
@@ -73,7 +73,7 @@ fn retrying_download(
 fn retrying_upload(
     filename: &str,
     data: &[u8],
-    socket: &mut UdpSocket,
+    socket: &UdpSocket,
     timeout: Duration,
     max_timeout: Duration,
     retries: usize,
@@ -86,7 +86,7 @@ fn retrying_upload(
         }
         let res = upload(filename, data, socket, timeout, max_timeout, retries);
         match res {
-            Ok(_) => return Ok(()),
+            Ok(()) => return Ok(()),
             Err(tftp_client::Error::Protocol { code, msg }) => {
                 debug!("Protocol error: {:?} {msg}", code);
                 local_retries += 1;
@@ -110,7 +110,7 @@ fn retrying_upload(
 /// Returns an error on TFTP errors
 /// # Panics
 /// Panics if we did not get back enough bytes
-pub fn temp(socket: &mut UdpSocket, retries: usize) -> Result<f32, Error> {
+pub fn temp(socket: &UdpSocket, retries: usize) -> Result<f32, Error> {
     let bytes = retrying_download("/temp", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
     Ok(f32::from_be_bytes(
         bytes[..4].try_into().map_err(|_| Error::Incomplete)?,
@@ -120,7 +120,7 @@ pub fn temp(socket: &mut UdpSocket, retries: usize) -> Result<f32, Error> {
 /// Gets the list of top level commands (as a string)
 /// # Errors
 /// Returns an error on TFTP errors
-pub fn help(socket: &mut UdpSocket, retries: usize) -> Result<String, Error> {
+pub fn help(socket: &UdpSocket, retries: usize) -> Result<String, Error> {
     let bytes = retrying_download("/help", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
     Ok(std::str::from_utf8(&bytes)?.to_string())
 }
@@ -129,10 +129,7 @@ pub fn help(socket: &mut UdpSocket, retries: usize) -> Result<String, Error> {
 /// Returns a hash map from device name to (addr,length)
 /// # Errors
 /// Returns an error on TFTP errors
-pub fn listdev(
-    socket: &mut UdpSocket,
-    retries: usize,
-) -> Result<HashMap<String, (u32, u32)>, Error> {
+pub fn listdev(socket: &UdpSocket, retries: usize) -> Result<HashMap<String, (u32, u32)>, Error> {
     // Create the hash map we'll be constructing to hold the device list
     let mut dev_map = HashMap::new();
 
@@ -185,7 +182,7 @@ pub fn read_device(
     device: &str,
     offset: usize,
     n: usize,
-    socket: &mut UdpSocket,
+    socket: &UdpSocket,
     retries: usize,
 ) -> Result<Vec<u8>, Error> {
     // To start the request, we need to form the filename string, defined by the TAPCP
@@ -206,7 +203,7 @@ pub fn write_device(
     device: &str,
     offset: usize,
     data: &[u8],
-    socket: &mut UdpSocket,
+    socket: &UdpSocket,
     retries: usize,
 ) -> Result<(), Error> {
     // To start the request, we need to form the filename string, defined by the TAPCP
@@ -230,7 +227,7 @@ pub fn write_device(
 pub fn read_flash(
     offset: usize,
     n: usize,
-    socket: &mut UdpSocket,
+    socket: &UdpSocket,
     retries: usize,
 ) -> Result<Vec<u8>, Error> {
     // spec as - `/flash.WORD_OFFSET[.NWORDS]` with WORD_OFFSET and NWORDs in hexadecimal
@@ -246,7 +243,7 @@ pub fn read_flash(
 pub fn write_flash(
     offset: usize,
     data: &[u8],
-    socket: &mut UdpSocket,
+    socket: &UdpSocket,
     retries: usize,
 ) -> Result<(), Error> {
     let filename = format!("/flash.{offset:x}");
@@ -264,7 +261,7 @@ pub fn write_flash(
 /// No validation is performed to ensure a program actually exists there
 /// # Errors
 /// Returns an error on TFTP errors
-pub fn progdev(addr: u32, socket: &mut UdpSocket) -> Result<(), Error> {
+pub fn progdev(addr: u32, socket: &UdpSocket) -> Result<(), Error> {
     match upload(
         "/progdev",
         &addr.to_be_bytes(),
@@ -273,7 +270,7 @@ pub fn progdev(addr: u32, socket: &mut UdpSocket) -> Result<(), Error> {
         MAX_TIMEOUT,
         0,
     ) {
-        Ok(_) | Err(_) => (),
+        Ok(()) | Err(_) => (),
     }
     // Then wait as the FPGA takes a while to reboot
     std::thread::sleep(Duration::from_secs(10));
@@ -284,7 +281,7 @@ pub fn progdev(addr: u32, socket: &mut UdpSocket) -> Result<(), Error> {
 /// # Errors
 /// Returns an error on TFTP errors or if the metadata couldn't be found
 pub fn get_metadata(
-    socket: &mut UdpSocket,
+    socket: &UdpSocket,
     user_flash_loc: u32,
     retries: usize,
 ) -> Result<HashMap<KString, String>, Error> {
@@ -323,7 +320,7 @@ pub fn get_metadata(
 #[allow(clippy::implicit_hasher)]
 pub fn set_metadata(
     data: &HashMap<KString, String>,
-    socket: &mut UdpSocket,
+    socket: &UdpSocket,
     user_flash_loc: u32,
     retries: usize,
 ) -> Result<(), Error> {

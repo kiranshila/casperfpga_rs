@@ -19,7 +19,7 @@ fixed = "1"
 typenum = "1"
 indicatif = "0.17"
 num-traits = "0.2"
-tftp_client = { git = "https://github.com/kiranshila/tftp_client" }
+tftp_client = "0.1"
 
 [dev-dependencies]
 anyhow = "1"

@@ -91,7 +91,7 @@ impl Tapcp {
 impl Transport for Tapcp {
     fn is_running(&mut self) -> TransportResult<bool> {
         // Check if sys_clkcounter exists
-        match tapcp::read_device("sys_clkcounter", 0, 1, &mut self.socket, self.retries) {
+        match tapcp::read_device("sys_clkcounter", 0, 1, &self.socket, self.retries) {
             Ok(_) => Ok(true),
             // In the case we get back a file not found error,
             // that implies the device is not running a user program.
@@ -112,7 +112,7 @@ impl Transport for Tapcp {
         // them. Because we don't want to do this read when we don't have to, we will branch
         if (offset % 4) == 0 && (data.len() % 4) == 0 {
             // Just do the write
-            tapcp::write_device(device, offset % 4, data, &mut self.socket, self.retries)
+            tapcp::write_device(device, offset % 4, data, &self.socket, self.retries)
                 .map_err(Error::from)?;
         } else {
             unimplemented!()
@@ -121,7 +121,7 @@ impl Transport for Tapcp {
     }
 
     fn listdev(&mut self) -> TransportResult<RegisterMap> {
-        let devices = tapcp::listdev(&mut self.socket, self.retries).map_err(Error::from)?;
+        let devices = tapcp::listdev(&self.socket, self.retries).map_err(Error::from)?;
         Ok(devices
             .iter()
             .map(|(k, (addr, len))| {
@@ -177,7 +177,7 @@ impl Transport for Tapcp {
             tapcp::write_flash(
                 self.platform.program_location() as usize + tapcp::FLASH_SECTOR_SIZE as usize * idx,
                 chunk,
-                &mut self.socket,
+                &self.socket,
                 retries,
             )
             .map_err(Error::from)?;
@@ -199,14 +199,14 @@ impl Transport for Tapcp {
                 Platform::SNAP => self.platform.program_location() >> 8,
                 Platform::SNAP2 => self.platform.program_location(),
             },
-            &mut self.socket,
+            &self.socket,
         )
         .map_err(Error::from)?;
         Ok(())
     }
 
     fn deprogram(&mut self) -> TransportResult<()> {
-        Ok(tapcp::progdev(0, &mut self.socket).map_err(Error::from)?)
+        Ok(tapcp::progdev(0, &self.socket).map_err(Error::from)?)
     }
 
     fn read_n_bytes(&mut self, device: &str, offset: usize, n: usize) -> TransportResult<Vec<u8>> {
@@ -220,7 +220,7 @@ impl Transport for Tapcp {
         let first_word = offset / 4;
         let last_word = (offset + n) / 4;
         let word_n = last_word - first_word;
-        let bytes = tapcp::read_device(device, first_word, word_n, &mut self.socket, self.retries)
+        let bytes = tapcp::read_device(device, first_word, word_n, &self.socket, self.retries)
             .map_err(Error::from)?;
         // Now we slice out the the relevant chunk
         let start_idx = offset % 4;
@@ -234,7 +234,7 @@ impl Tapcp {
     /// # Errors
     /// Returns errors on transport failures
     pub fn temperature(&mut self) -> Result<f32, Error> {
-        Ok(tapcp::temp(&mut self.socket, self.retries)?)
+        Ok(tapcp::temp(&self.socket, self.retries)?)
     }
 
     /// Gets the metadata for the currently programed design
@@ -242,7 +242,7 @@ impl Tapcp {
     /// Returns errors on transport failures
     pub fn metadata(&mut self) -> Result<HashMap<KString, String>, Error> {
         Ok(tapcp::get_metadata(
-            &mut self.socket,
+            &self.socket,
             self.platform.flash_location(),
             self.retries,
         )?)
@@ -265,7 +265,7 @@ impl Tapcp {
         .collect();
         Ok(tapcp::set_metadata(
             &meta,
-            &mut self.socket,
+            &self.socket,
             self.platform.flash_location(),
             self.retries,
         )?)

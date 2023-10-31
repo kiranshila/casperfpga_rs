@@ -12,7 +12,7 @@ const SNAP_FLASH_LOC: u32 = 0x800000;
 
 fn main() -> anyhow::Result<()> {
     // Setup the socket
-    let mut socket = UdpSocket::bind("0.0.0.0:0")?;
+    let socket = UdpSocket::bind("0.0.0.0:0")?;
     // Set a default timeout
     let timeout = Duration::from_secs_f32(0.5);
     socket.set_write_timeout(Some(timeout))?;
@@ -24,11 +24,11 @@ fn main() -> anyhow::Result<()> {
         ("flash".into(), "1234".to_string()),
         ("foo".into(), "bar".to_string()),
     ]);
-    tapcp::set_metadata(&sample_meta, &mut socket, SNAP_FLASH_LOC, RETRIES)?;
+    tapcp::set_metadata(&sample_meta, &socket, SNAP_FLASH_LOC, RETRIES)?;
     std::thread::sleep(Duration::from_secs_f32(0.5));
     assert_eq!(
         sample_meta,
-        tapcp::get_metadata(&mut socket, SNAP_FLASH_LOC, RETRIES)?
+        tapcp::get_metadata(&socket, SNAP_FLASH_LOC, RETRIES)?
     );
     Ok(())
 }

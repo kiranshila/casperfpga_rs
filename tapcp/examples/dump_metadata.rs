@@ -11,7 +11,7 @@ const SNAP_FLASH_LOC: u32 = 0x800000;
 
 fn main() -> anyhow::Result<()> {
     // Setup the socket
-    let mut socket = UdpSocket::bind("0.0.0.0:0")?;
+    let socket = UdpSocket::bind("0.0.0.0:0")?;
     // Set a default timeout
     let timeout = Duration::from_secs_f32(0.1);
     socket.set_write_timeout(Some(timeout))?;
@@ -19,6 +19,6 @@ fn main() -> anyhow::Result<()> {
     // Connect
     let host_addr: SocketAddr = "192.168.0.3:69".parse()?;
     socket.connect(host_addr)?;
-    dbg!(tapcp::get_metadata(&mut socket, SNAP_FLASH_LOC, RETRIES)?);
+    dbg!(tapcp::get_metadata(&socket, SNAP_FLASH_LOC, RETRIES)?);
     Ok(())
 }
