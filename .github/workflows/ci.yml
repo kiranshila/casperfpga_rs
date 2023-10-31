@@ -8,27 +8,18 @@ jobs:
       RUSTFLAGS: -D warnings
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 0
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          # We need nightly for fmt
-          toolchain: nightly
-          override: true
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
       - name: Lint (clippy)
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-targets
+        run: cargo clippy --all-targets -- -D warnings
       - name: Lint (rustfmt)
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all --check
+        run: cargo fmt --all -- --check
 
   build:
     name: Build and test
@@ -41,25 +32,21 @@ jobs:
       RUSTFLAGS: -D warnings
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 0
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust-version }}
-          override: true
           components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@v1
-      - name: Build all targets with
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --all-targets
-      - name: Tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+      - uses: Swatinem/rust-cache@v2
+      - name: Build all targets
+        run: cargo build --all-targets
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
+      - name: Run nextest
+        run: cargo test --all-targets
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Generate code coverage
