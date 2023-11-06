@@ -36,7 +36,7 @@ pub struct Snapshot<T, F> {
     /// The name of the register
     name: String,
     /// Marker for the integer type of the data type
-    phantom: PhantomData<F>,
+    phantom: PhantomData<*const F>,
     /// Flag for whether this snapshot block has separate "offset" control
     has_offset: bool,
     /// Number of samples (2^n)

@@ -62,7 +62,7 @@ pub struct FixedSoftwareRegister<T, F> {
     /// The name of the register
     name: String,
     /// Marker for the fixed point type
-    phantom: PhantomData<F>,
+    phantom: PhantomData<*const F>,
 }
 
 /// The unidirectional 32-bit unsigned fixed point software register yellow block

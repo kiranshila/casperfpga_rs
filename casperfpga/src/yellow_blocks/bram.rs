@@ -30,7 +30,7 @@ pub struct Bram<T, F> {
     /// The name of the register
     name: String,
     /// Marker for the integer type of the data type
-    phantom: PhantomData<F>,
+    phantom: PhantomData<*const F>,
     // Size of the BRAM in number of words
     size: usize,
 }
