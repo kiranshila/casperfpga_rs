@@ -27,7 +27,7 @@ jobs:
     strategy:
       matrix:
         rust-version: [stable, "1.71", nightly]
-        platform: [x86_64-unknown-linux, aarch64-unknown-linux-gnu]
+        target: [x86_64-unknown-linux, aarch64-unknown-linux-gnu]
       fail-fast: false
     env:
       RUSTFLAGS: -D warnings
@@ -49,7 +49,7 @@ jobs:
           args: "--all-targets"
           strip: true
           toolchain: ${{ matrix.rust-version }}
-          target: ${{ matrix.platform.target }}
+          target: ${{ matrix.target }}
 
       - name: Test
         uses: houseabsolute/actions-rust-cross@v0
@@ -58,17 +58,17 @@ jobs:
           args: "--all-targets"
           strip: true
           toolchain: ${{ matrix.rust-version }}
-          target: ${{ matrix.platform.target }}
+          target: ${{ matrix.target }}
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Generate code coverage
-        if: startsWith(matrix.rust-version, 'stable') && startsWith(matrix.platform, 'x86_64-unknown-linux')
+        if: startsWith(matrix.rust-version, 'stable') && startsWith(matrix.target, 'x86_64-unknown-linux')
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
-        if: startsWith(matrix.rust-version, 'stable') && startsWith(matrix.platform, 'x86_64-unknown-linux')
+        if: startsWith(matrix.rust-version, 'stable') && startsWith(matrix.target, 'x86_64-unknown-linux')
         uses: codecov/codecov-action@v3
         with:
           files: lcov.info
