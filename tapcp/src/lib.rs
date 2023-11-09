@@ -4,12 +4,8 @@
 use casper_utils::csl;
 use kstring::KString;
 use std::{
+    self,
     collections::HashMap,
-    ffi::{
-        c_char,
-        c_uchar,
-        CStr,
-    },
     fmt::Write,
     net::UdpSocket,
     time::Duration,
