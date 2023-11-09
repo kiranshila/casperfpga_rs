@@ -1,8 +1,7 @@
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 
-mod csl;
-
+use casper_utils::csl;
 use kstring::KString;
 use std::{
     collections::HashMap,
@@ -36,6 +35,8 @@ pub enum Error {
     Utf8(#[from] std::str::Utf8Error),
     #[error("No metadata returned when we requested metadata")]
     MissingMetadata,
+    #[error(transparent)]
+    Csl(#[from] csl::Error),
 }
 
 // The FPGA handles errors poorly, so when we try to move to quick (esp with sequential commands),
@@ -134,47 +135,20 @@ pub fn help(socket: &UdpSocket, retries: usize) -> Result<String, Error> {
 /// # Errors
 /// Returns an error on TFTP errors
 pub fn listdev(socket: &UdpSocket, retries: usize) -> Result<HashMap<String, (u32, u32)>, Error> {
-    // Create the hash map we'll be constructing to hold the device list
-    let mut dev_map = HashMap::new();
-
+    // Grab CSL bytes
     let bytes = retrying_download("/listdev", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
-    // Bytes back from this are stored as CSL, so we'll use Dave's C program to uncompress it
-    // The CSL lib has internal state for some reason
-
-    // The first two bytes are the length, but we don't care because that's part of the UDP payload
-    // Safety: bytes is valid at this point because it's rust memory
-    unsafe { csl::csl_iter_init(bytes[2..].as_ptr()) }
-
-    // Now, we have to use the CSL iterator to traverse the list
-    // Create a ptr to null that will be updated by `csl_iter_next`
-    let mut key_ptr: *const c_uchar = std::ptr::null();
-
-    loop {
-        // Safety: key_ptr is valid because it's rust memory
-        let value_ptr = unsafe { csl::csl_iter_next(&mut key_ptr) };
-
-        if value_ptr.is_null() {
-            break;
-        }
-
-        // Now key *should* be valid
-        // Safety: We're trusting Dave gives us ptrs to valid ASCII
-        // and we can safely reinterpret the *const u8 and *const i8 because they share a size
-        let key = unsafe { CStr::from_ptr(key_ptr.cast::<c_char>()) }
-            .to_str()?
-            .into();
-
-        // Safety: The "spec" says this will be 8 bytes
-        let value = unsafe { std::slice::from_raw_parts(value_ptr, 8) };
-
-        // The first 4 byte word is the offset (address) and the second is the length
-        let addr = u32::from_be_bytes(value[..4].try_into().map_err(|_| Error::Incomplete)?);
-        let length = u32::from_be_bytes(value[4..].try_into().map_err(|_| Error::Incomplete)?);
-
-        // Finally, push this all to our hash map
-        dev_map.insert(key, (addr, length));
-    }
-    Ok(dev_map)
+    // Unpack CSL
+    let csl = csl::from_bytes(&bytes)?;
+    // Translate into our device map
+    csl.into_iter()
+        .map(|(k, v)| {
+            // Value should be exactly 8 bytes
+            // First 4 is offset, second is length
+            let addr = u32::from_be_bytes(v[..4].try_into().map_err(|_| Error::Incomplete)?);
+            let length = u32::from_be_bytes(v[4..].try_into().map_err(|_| Error::Incomplete)?);
+            Ok((k, (addr, length)))
+        })
+        .collect()
 }
 
 /// Read memory associated with the gateware device `device`

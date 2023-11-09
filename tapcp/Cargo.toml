@@ -17,10 +17,7 @@ thiserror = "1"
 kstring = "2"
 tftp_client = "0.1"
 tracing = "0.1"
-
-[build-dependencies]
-bindgen = "0.68"
-cc = "1"
+casper_utils = { path = "../casper_utils" }
 
 [dev-dependencies]
 anyhow = "1"
