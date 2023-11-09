@@ -27,7 +27,7 @@ jobs:
     strategy:
       matrix:
         rust-version: [stable, "1.71", nightly]
-        target: [x86_64-unknown-linux, aarch64-unknown-linux-gnu]
+        target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
       fail-fast: false
     env:
       RUSTFLAGS: -D warnings
