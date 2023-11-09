@@ -27,33 +27,48 @@ jobs:
     strategy:
       matrix:
         rust-version: [stable, "1.71", nightly]
+        platform: [x86_64-unknown-linux, aarch64-unknown-linux-gnu]
       fail-fast: false
     env:
       RUSTFLAGS: -D warnings
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@master
+
+      - name: Cache Rust deps
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Build
+        uses: houseabsolute/actions-rust-cross@v0
         with:
+          command: "build"
+          args: "--all-targets"
+          strip: true
           toolchain: ${{ matrix.rust-version }}
-          components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@v2
-      - name: Build all targets
-        run: cargo build --all-targets
-      - name: Install nextest
-        uses: taiki-e/install-action@nextest
-      - name: Run nextest
-        run: cargo test --all-targets
+          target: ${{ matrix.platform.target }}
+
+      - name: Test
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: "test"
+          args: "--all-targets"
+          strip: true
+          toolchain: ${{ matrix.rust-version }}
+          target: ${{ matrix.platform.target }}
+
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
+
       - name: Generate code coverage
-        if: startsWith(matrix.rust-version, 'stable')
+        if: startsWith(matrix.rust-version, 'stable') && startsWith(matrix.platform, 'x86_64-unknown-linux')
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+
       - name: Upload coverage to Codecov
-        if: startsWith(matrix.rust-version, 'stable')
+        if: startsWith(matrix.rust-version, 'stable') && startsWith(matrix.platform, 'x86_64-unknown-linux')
         uses: codecov/codecov-action@v3
         with:
           files: lcov.info
