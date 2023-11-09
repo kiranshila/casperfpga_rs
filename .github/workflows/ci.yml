@@ -47,7 +47,6 @@ jobs:
         with:
           command: "build"
           args: "--all-targets"
-          strip: true
           toolchain: ${{ matrix.rust-version }}
           target: ${{ matrix.target }}
 
@@ -56,7 +55,6 @@ jobs:
         with:
           command: "test"
           args: "--all-targets"
-          strip: true
           toolchain: ${{ matrix.rust-version }}
           target: ${{ matrix.target }}
 
