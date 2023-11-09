@@ -40,7 +40,9 @@ use std::{
 use thiserror::Error;
 
 #[derive(Debug, PartialEq, Eq)]
+/// An FPG file
 pub struct File {
+    pub registers: HashMap<KString, Register>,
     pub devices: HashMap<KString, Device>,
     pub bitstream: Vec<u8>,
     pub md5: [u8; 16],
@@ -76,6 +78,10 @@ impl FpgaDesign for File {
 
     fn devices(&self) -> &super::Devices {
         &self.devices
+    }
+
+    fn registers(&self) -> &super::Registers {
+        &self.registers
     }
 }
 
@@ -135,7 +141,11 @@ fn quit(input: &[u8]) -> IResult<&[u8], &[u8]> {
     terminated(tag("?quit"), line_ending)(input)
 }
 
-type AlmostFile = (HashMap<KString, Device>, Vec<u8>);
+type AlmostFile = (
+    HashMap<KString, Register>,
+    HashMap<KString, Device>,
+    Vec<u8>,
+);
 
 pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], AlmostFile> {
     let (remaining, _) = shebang(input)?;
@@ -144,7 +154,7 @@ pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], AlmostFile> {
     let (remaining, metas) = many0(meta)(remaining)?;
     let (bitstream, _) = quit(remaining)?;
 
-    let mut registers: HashMap<KString, Register> = registers
+    let registers: HashMap<KString, Register> = registers
         .into_iter()
         .map(|(name, addr, size)| (name.to_owned().into(), Register { addr, size }))
         .collect();
@@ -162,14 +172,14 @@ pub(crate) fn fpg_file(input: &[u8]) -> IResult<&[u8], AlmostFile> {
                     Device {
                         kind: kind.to_owned(),
                         metadata: HashMap::from_iter([(k.to_owned().into(), v.to_owned())]),
-                        register: registers.remove(&name),
+                        register: registers.get(&name).copied(),
                     },
                 );
             }
         }
     }
 
-    Ok((bitstream, (devices, bitstream.into())))
+    Ok((bitstream, (registers, devices, bitstream.into())))
 }
 
 /// Reads a CASPER-specific FPG file
@@ -187,9 +197,10 @@ where
     // Calculate the MD5
     let md5 = md5::compute(&contents);
 
-    let (_, (devs, bs)) = fpg_file(&contents).map_err(|_| Error::ParseMatch)?;
+    let (_, (regs, devs, bs)) = fpg_file(&contents).map_err(|_| Error::ParseMatch)?;
     let mut file = File {
         devices: devs,
+        registers: regs,
         bitstream: bs,
         md5: md5.into(),
         filename: filename.as_ref().file_name().unwrap().to_owned(),
@@ -259,7 +270,14 @@ mod tests {
 
         input.append(&mut vec![0xDE, 0xAD, 0xBE, 0xEF]);
 
-        let (_, (devs, bs)) = fpg_file(&input).unwrap();
+        let (_, (regs, devs, bs)) = fpg_file(&input).unwrap();
+        assert_eq!(
+            *regs.get("tx_en").unwrap(),
+            Register {
+                addr: 217_404,
+                size: 4
+            }
+        );
         assert_eq!(
             *devs.get("SNAP").unwrap(),
             Device {

@@ -8,7 +8,7 @@ use std::{
 
 pub mod fpg;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 /// A register on the FPGA bus described by its 32-bit address and size in bytes
 pub struct Register {
     pub addr: u32,
@@ -33,6 +33,9 @@ impl Device {
 /// A map from device name (corresponding with a register name) to [`Device`]
 pub type Devices = HashMap<KString, Device>;
 
+/// A map from register name to [`Register`]
+pub type Registers = HashMap<KString, Register>;
+
 /// Any type that provides all the information to concretly describe a CASPER design must implement
 /// the [`FpgaDesign`] trait. Right now this is just FPG files, but could be extended to bitstream +
 /// device tree, etc.
@@ -53,4 +56,7 @@ pub trait FpgaDesign {
 
     /// Get the list of potentially constructable devices
     fn devices(&self) -> &Devices;
+
+    /// Get the list of system regisers
+    fn registers(&self) -> &Registers;
 }
