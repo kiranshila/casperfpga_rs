@@ -6,7 +6,11 @@ mod csl;
 use kstring::KString;
 use std::{
     collections::HashMap,
-    ffi::CStr,
+    ffi::{
+        c_char,
+        c_uchar,
+        CStr,
+    },
     fmt::Write,
     net::UdpSocket,
     time::Duration,
@@ -143,7 +147,7 @@ pub fn listdev(socket: &UdpSocket, retries: usize) -> Result<HashMap<String, (u3
 
     // Now, we have to use the CSL iterator to traverse the list
     // Create a ptr to null that will be updated by `csl_iter_next`
-    let mut key_ptr = std::ptr::null();
+    let mut key_ptr: *const c_uchar = std::ptr::null();
 
     loop {
         // Safety: key_ptr is valid because it's rust memory
@@ -156,7 +160,7 @@ pub fn listdev(socket: &UdpSocket, retries: usize) -> Result<HashMap<String, (u3
         // Now key *should* be valid
         // Safety: We're trusting Dave gives us ptrs to valid ASCII
         // and we can safely reinterpret the *const u8 and *const i8 because they share a size
-        let key = unsafe { CStr::from_ptr(key_ptr.cast::<i8>()) }
+        let key = unsafe { CStr::from_ptr(key_ptr.cast::<c_char>()) }
             .to_str()?
             .into();
 
