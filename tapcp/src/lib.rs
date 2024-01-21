@@ -3,8 +3,17 @@
 
 use casper_utils::csl;
 use kstring::KString;
-use std::{self, collections::HashMap, fmt::Write, net::UdpSocket, time::Duration};
-use tftp_client::{download, upload};
+use std::{
+    self,
+    collections::HashMap,
+    fmt::Write,
+    net::UdpSocket,
+    time::Duration,
+};
+use tftp_client::{
+    download,
+    upload,
+};
 use thiserror::Error;
 use tracing::debug;
 
