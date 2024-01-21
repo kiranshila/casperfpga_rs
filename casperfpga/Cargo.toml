@@ -1,6 +1,6 @@
 [package]
 name = "casperfpga"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/kiranshila/casperfpga_rs"
@@ -34,8 +34,8 @@ version = "0.2.0"
 
 [dependencies.tapcp]
 path = "../tapcp"
-version = "0.2.0"
+version = "0.2.1"
 
 [dependencies.casper_utils]
 path = "../casper_utils"
-version = "0.2.0"
+version = "0.2.1"
