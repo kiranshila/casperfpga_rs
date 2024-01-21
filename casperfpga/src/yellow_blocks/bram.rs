@@ -2,7 +2,11 @@ use crate::transport::Transport;
 use fixed::traits::Fixed;
 use std::{
     marker::PhantomData,
-    sync::{Arc, Mutex, Weak},
+    sync::{
+        Arc,
+        Mutex,
+        Weak,
+    },
 };
 use thiserror::Error;
 

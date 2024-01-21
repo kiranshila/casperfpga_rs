@@ -19,7 +19,11 @@ use crate::transport::Transport;
 use fixed::traits::Fixed;
 use std::{
     marker::PhantomData,
-    sync::{Arc, Mutex, Weak},
+    sync::{
+        Arc,
+        Mutex,
+        Weak,
+    },
 };
 use thiserror::Error;
 
@@ -214,10 +218,16 @@ where
 
 #[cfg(test)]
 mod tests {
-    use fixed::types::{I25F7, U27F5};
+    use fixed::types::{
+        I25F7,
+        U27F5,
+    };
 
     use super::*;
-    use crate::{core::Register, transport::mock::Mock};
+    use crate::{
+        core::Register,
+        transport::mock::Mock,
+    };
     use std::collections::HashMap;
 
     #[test]

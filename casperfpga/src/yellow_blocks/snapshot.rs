@@ -1,12 +1,20 @@
 //! TODO - support bitsnap, integrate with bram lib
 
-use crate::transport::{Deserialize, Serialize, Transport};
+use crate::transport::{
+    Deserialize,
+    Serialize,
+    Transport,
+};
 use casperfpga_derive::CasperSerde;
 use num_traits::Unsigned;
 use packed_struct::prelude::*;
 use std::{
     marker::PhantomData,
-    sync::{Arc, Mutex, Weak},
+    sync::{
+        Arc,
+        Mutex,
+        Weak,
+    },
 };
 use thiserror::Error;
 
