@@ -3,17 +3,8 @@
 
 use casper_utils::csl;
 use kstring::KString;
-use std::{
-    self,
-    collections::HashMap,
-    fmt::Write,
-    net::UdpSocket,
-    time::Duration,
-};
-use tftp_client::{
-    download,
-    upload,
-};
+use std::{self, collections::HashMap, fmt::Write, net::UdpSocket, time::Duration};
+use tftp_client::{download, upload};
 use thiserror::Error;
 use tracing::debug;
 
@@ -109,12 +100,11 @@ fn retrying_upload(
 /// Gets the temperature of the remote device in Celsius
 /// # Errors
 /// Returns an error on TFTP errors
-/// # Panics
-/// Panics if we did not get back enough bytes
 pub fn temp(socket: &UdpSocket, retries: usize) -> Result<f32, Error> {
     let bytes = retrying_download("/temp", socket, DEFAULT_TIMEOUT, MAX_TIMEOUT, retries)?;
+    let four_bytes = bytes.get(..4).ok_or(Error::Incomplete)?;
     Ok(f32::from_be_bytes(
-        bytes[..4].try_into().map_err(|_| Error::Incomplete)?,
+        four_bytes.try_into().map_err(|_| Error::Incomplete)?,
     ))
 }
 
