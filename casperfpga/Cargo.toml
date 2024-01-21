@@ -20,6 +20,8 @@ typenum = "1"
 indicatif = "0.17"
 num-traits = "0.2"
 tftp_client = "0.1"
+memmap2 = "0.9"
+nix = "0.27.1"
 
 [dev-dependencies]
 anyhow = "1"

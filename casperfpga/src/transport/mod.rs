@@ -1,4 +1,5 @@
 //! Defines all the transport mechanisms for which all casperfpga transports must implement
+pub mod local;
 pub mod mock;
 pub mod tapcp;
 
@@ -22,6 +23,8 @@ pub enum Error {
     Mock(#[from] mock::Error),
     #[error(transparent)]
     Tapcp(#[from] tapcp::Error),
+    #[error(transparent)]
+    Local(#[from] local::Error),
 }
 
 /// All methods involving transports will have this signature
