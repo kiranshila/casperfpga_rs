@@ -2,11 +2,7 @@ use crate::transport::Transport;
 use fixed::traits::Fixed;
 use std::{
     marker::PhantomData,
-    sync::{
-        Arc,
-        Mutex,
-        Weak,
-    },
+    sync::{Arc, Mutex, Weak},
 };
 use thiserror::Error;
 
@@ -30,7 +26,7 @@ pub struct Bram<T, F> {
     /// The name of the register
     name: String,
     /// Marker for the integer type of the data type
-    phantom: PhantomData<*const F>,
+    phantom: PhantomData<F>,
     // Size of the BRAM in number of words
     size: usize,
 }

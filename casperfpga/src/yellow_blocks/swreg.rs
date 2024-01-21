@@ -19,11 +19,7 @@ use crate::transport::Transport;
 use fixed::traits::Fixed;
 use std::{
     marker::PhantomData,
-    sync::{
-        Arc,
-        Mutex,
-        Weak,
-    },
+    sync::{Arc, Mutex, Weak},
 };
 use thiserror::Error;
 
@@ -62,7 +58,7 @@ pub struct FixedSoftwareRegister<T, F> {
     /// The name of the register
     name: String,
     /// Marker for the fixed point type
-    phantom: PhantomData<*const F>,
+    phantom: PhantomData<F>,
 }
 
 /// The unidirectional 32-bit unsigned fixed point software register yellow block
@@ -218,16 +214,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use fixed::types::{
-        I25F7,
-        U27F5,
-    };
+    use fixed::types::{I25F7, U27F5};
 
     use super::*;
-    use crate::{
-        core::Register,
-        transport::mock::Mock,
-    };
+    use crate::{core::Register, transport::mock::Mock};
     use std::collections::HashMap;
 
     #[test]

@@ -1,20 +1,12 @@
 //! TODO - support bitsnap, integrate with bram lib
 
-use crate::transport::{
-    Deserialize,
-    Serialize,
-    Transport,
-};
+use crate::transport::{Deserialize, Serialize, Transport};
 use casperfpga_derive::CasperSerde;
 use num_traits::Unsigned;
 use packed_struct::prelude::*;
 use std::{
     marker::PhantomData,
-    sync::{
-        Arc,
-        Mutex,
-        Weak,
-    },
+    sync::{Arc, Mutex, Weak},
 };
 use thiserror::Error;
 
@@ -36,7 +28,7 @@ pub struct Snapshot<T, F> {
     /// The name of the register
     name: String,
     /// Marker for the integer type of the data type
-    phantom: PhantomData<*const F>,
+    phantom: PhantomData<F>,
     /// Flag for whether this snapshot block has separate "offset" control
     has_offset: bool,
     /// Number of samples (2^n)
