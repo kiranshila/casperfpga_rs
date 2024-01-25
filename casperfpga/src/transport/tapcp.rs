@@ -1,21 +1,12 @@
 //! The casperfpga transport implementations for TAPCP
-use super::{
-    Transport,
-    TransportResult,
-};
-use crate::core::{
-    Register,
-    RegisterMap,
-};
+use super::{Transport, TransportResult};
+use crate::core::{Register, RegisterMap};
 use casper_utils::design_sources::FpgaDesign;
 use indicatif::ProgressBar;
 use kstring::KString;
 use std::{
     collections::HashMap,
-    net::{
-        SocketAddr,
-        UdpSocket,
-    },
+    net::{SocketAddr, UdpSocket},
     time::Duration,
 };
 use thiserror::Error;
@@ -112,7 +103,7 @@ impl Transport for Tapcp {
         // them. Because we don't want to do this read when we don't have to, we will branch
         if (offset % 4) == 0 && (data.len() % 4) == 0 {
             // Just do the write
-            tapcp::write_device(device, offset % 4, data, &self.socket, self.retries)
+            tapcp::write_device(device, offset / 4, data, &self.socket, self.retries)
                 .map_err(Error::from)?;
         } else {
             unimplemented!()
