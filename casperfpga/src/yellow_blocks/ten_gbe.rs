@@ -1,27 +1,13 @@
 //! Routines for interacting with the CASPER 10GbE Core
 use crate::{
-    transport::{
-        Deserialize,
-        Serialize,
-        Transport,
-    },
+    transport::{Deserialize, Serialize, Transport},
     yellow_blocks::Address,
 };
-use casperfpga_derive::{
-    address,
-    CasperSerde,
-};
-use packed_struct::{
-    prelude::*,
-    PackedStruct,
-    PackingResult,
-};
+use casperfpga_derive::{address, CasperSerde};
+use packed_struct::{prelude::*, PackedStruct, PackingResult};
 use std::{
     net::Ipv4Addr,
-    sync::{
-        Mutex,
-        Weak,
-    },
+    sync::{Arc, Mutex, Weak},
 };
 use thiserror::Error;
 
@@ -174,6 +160,15 @@ impl<T> TenGbE<T>
 where
     T: Transport,
 {
+    #[must_use]
+    pub fn new(transport: &Arc<Mutex<T>>, reg_name: &str) -> Self {
+        let transport = Arc::downgrade(transport);
+        Self {
+            transport,
+            name: reg_name.to_string(),
+        }
+    }
+
     /// Builds a [`TenGbE`] from FPG description strings
     /// # Errors
     /// Returns an error on bad string arguments
@@ -341,5 +336,38 @@ where
         let offset = 0x1000 + 8 * (*ip.octets().last().unwrap()) as usize;
         transport.write(&self.name, offset, &MacAddress(*mac))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{core::Register, transport::mock::Mock};
+    use std::{collections::HashMap, sync::Arc};
+
+    #[test]
+    fn test_set_single_arp_entry() {
+        let transport = Mock::new(HashMap::from([(
+            "gbe0".into(),
+            Register {
+                addr: 0,
+                length: 12411, // ignoring the tx and rx buffer
+            },
+        )]));
+        let transport = Arc::new(Mutex::new(transport));
+        let gbe0 = TenGbE::new(&transport, "gbe0");
+        gbe0.set_single_arp_entry(
+            "192.168.0.1".parse().unwrap(),
+            &[0xDE, 0xAD, 0xBE, 0xEF, 0xB0, 0xBA],
+        )
+        .unwrap();
+
+        let bytes = transport
+            .lock()
+            .unwrap()
+            .read_n_bytes("gbe0", 4104, 8) // Offset computed from python casperfpga
+            .unwrap();
+
+        assert_eq!(vec![0, 0, 0xDE, 0xAD, 0xBE, 0xEF, 0xB0, 0xBA], bytes);
     }
 }
